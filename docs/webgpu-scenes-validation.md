@@ -24,7 +24,7 @@
 ## 工程与数据
 
 - Windows / MSVC 原生 **38/38**：原 SDK / Geometry / Tiny 回归、两个大型场景、web scene 与 image contract。
-- Emscripten **7.0.0** 实际编译；三场景 native/WASM **6/6** 通过。规范化的只是虚拟根目录，typed parameters、引用、资源路径、scope、Transform、诊断与五个数组均比较；几何、records、解码像素和全部 mip 逐字节一致。
+- Emscripten **7.0.0** 实际编译；三场景 native/WASM **7/7** 通过。虚拟根目录规范化；typed parameters、引用、资源路径、scope、诊断均严格比较。派生 double Transform 允许 `32×epsilon×max(1,abs(a),abs(b))` 的跨 libm 舍入差；五个 GPU 数组仍逐字节比较。另有比较器回归，确保不能把该容差用于原始数值或引用 ID。
 - 异常检查包含坏 PBRT / 缺文件 / 作用域错误、坏 TGA 后恢复、Import 隔离、共享 BLAS 与 handle 关闭后不可访问。TGA 测试涵盖 top/bottom/right origin、BGR、RLE、越界/截断、RGB scalar 与 alpha、linear/sRGB mip、NPOT 边缘。
 - 类型检查、生产构建，以及 `/renamed-project/` 的三个包、两个 Worker、WGSL、WASM MIME/compile、每文件 SHA256、LICENSE 检查已实际通过。
 - 可重建原始资产包已在空目录完整校验：Spaceship **90 文件 / 6,968,024 B gzip**，Bathroom **867 文件 / 36,309,416 B gzip**。锁与下载脚本保留根 PBRT / LICENSE hash，拒绝覆盖修改过的资产，排除 `.lt` / `.ivol`。
@@ -52,6 +52,8 @@ Bathroom 在 256×256 / 1024 spp、depth=17 完成原始视角累积，保留全
 另做 Spaceship 三个 Web seed（各 256 spp）与 CUDA 三帧（共 768 spp）的均值对照：Web RGB 均值 `(0.08833, 0.08508, 0.08884)`，CUDA `(0.08669, 0.08319, 0.08740)`，线性 RMSE `0.05074`、MAE `0.01024`。此为带噪描述性对照，不是等价性通过门槛；CUDA box/AA-off 与 Web PBRT triangle filter、材质和阴影策略均有已知差别。
 
 参考数据与 manifest 位于本机 `out/webgpu/reference/`，原 LightTransport 工作树未修改。Web 的 rough dielectric、独立 alpha / bump、角色 mip、采样与数值保护是新增/修改路径；不能因为图像相似便声称 CUDA 或官方 PBRT 等价。PFM 用线性 RGB 检查，显示图采用相同曝光/tonemap；噪声和已记录的估计器差异不作逐像素确定性门槛。
+
+相机移动、材质开关和 reset 会恢复累积，即使上一轮达到目标 spp 自动暂停。浴室地面视角以同一 seed / 64 spp 导出开关对照，开启和关闭 alpha+bump 的 HDR 均有限，65,536 像素中 33,518 个发生变化；这是功能开关证据，不是像素真值或两项效果的独立误差证明。Inspector 已实际展开原始 float 贴图与线性数据缩略图。
 
 ## 发布与验收边界
 

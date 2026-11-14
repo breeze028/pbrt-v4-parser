@@ -12,6 +12,29 @@ const native=process.env.PBRT4_WEB_PACK ?? resolve(root,process.platform==='win3
 function open(path){const b=new TextEncoder().encode(path+'\0'),p=wasm._malloc(b.length);wasm.HEAPU8.set(b,p);const h=wasm._p4_open(p);wasm._free(p);assert.ok(h);return h;}
 function snapshot(h){return {metadata:JSON.parse(wasm.UTF8ToString(wasm._p4_metadata(h))),buffers:Array.from({length:5},(_,k)=>{const p=wasm._p4_data(h,k),n=wasm._p4_bytes(h,k);return Buffer.from(wasm.HEAPU8.slice(p,p+n));})};}
 const scenes=[['cornell-box',36,8]];
+// libm and native contraction can differ at the last double bits in LookAt.
+// Allow only derived matrices a small double tolerance; preserve exact IR values.
+function compareMetadata(actual,expected,path='metadata'){
+ if(actual&&expected&&typeof actual==='object'&&typeof expected==='object'){
+  assert.equal(Array.isArray(actual),Array.isArray(expected),path+' container type');
+  assert.deepEqual(Object.keys(actual),Object.keys(expected),path+' keys');
+  for(const key of Object.keys(actual)){
+   const a=actual[key],b=expected[key],name=path+'.'+key;
+   if(key==='transform'||key==='endTransform'){
+    assert.equal(a.length,16,name);assert.equal(b.length,16,name);
+    for(let i=0;i<16;i++)assert.ok(Number.isFinite(a[i])&&Number.isFinite(b[i])&&Math.abs(a[i]-b[i])<=32*Number.EPSILON*Math.max(1,Math.abs(a[i]),Math.abs(b[i])),`${name}[${i}]: ${a[i]} versus ${b[i]}`);
+   }else compareMetadata(a,b,name);
+  }
+ }else assert.deepEqual(actual,expected,path);
+}
+test('parity comparison limits tolerance to derived double matrices',()=>{
+ const matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+ const a={transform:matrix,parameters:[{values:[0.1]}],references:[{id:1}]};
+ compareMetadata(a,{...a,transform:matrix.map((v,i)=>i===0?v+Number.EPSILON:v)});
+ assert.throws(()=>compareMetadata(a,{...a,transform:matrix.map((v,i)=>i===0?v+1e-10:v)}));
+ assert.throws(()=>compareMetadata(a,{...a,parameters:[{values:[0.1+Number.EPSILON]}]}));
+ assert.throws(()=>compareMetadata(a,{...a,references:[{id:2}]}));
+});
 if(process.env.PBRT4_WEB_LARGE_SCENES==='1')scenes.push(['spaceship',457560,91],['bathroom',592188,856]);
 for(const [name,triangles,placements] of scenes) {
  test('native/WASM identical GPU arrays: '+name,async()=>{
@@ -24,7 +47,7 @@ for(const [name,triangles,placements] of scenes) {
    const output=resolve(root,'out/web-native-compare',name);await mkdir(output,{recursive:true});
    const result=spawnSync(native,[resolve(root,'scenes',name,'scene-v4.pbrt'),output],{encoding:'utf8'});assert.equal(result.status,0,result.stderr);
    const normalize=(meta,prefix)=>JSON.parse(JSON.stringify(meta,(_key,value)=>{if(typeof value!=='string')return value;const path=value.replaceAll('\\','/'),base=prefix.replaceAll('\\','/');return path===base||path.startsWith(base+'/')?'<scene>'+path.slice(base.length):path;}));
-   assert.deepEqual(normalize(scene.metadata,'/'+name),normalize(JSON.parse(await readFile(resolve(output,'metadata.json'),'utf8')),resolve(root,'scenes',name)),'Scene IR, transforms, references and diagnostics');
+   compareMetadata(normalize(scene.metadata,'/'+name),normalize(JSON.parse(await readFile(resolve(output,'metadata.json'),'utf8')),resolve(root,'scenes',name)));
    for(let k=0;k<5;k++){
      const reference=await readFile(resolve(output,`buffer${k}.bin`));assert.equal(scene.buffers[k].length,reference.length,`buffer${k} length`);
      if(!scene.buffers[k].equals(reference)){let first=0;while(scene.buffers[k][first]===reference[first])first++;assert.fail(`buffer${k}: first mismatch at byte ${first}, WASM ${scene.buffers[k][first]}, native ${reference[first]}`);}
