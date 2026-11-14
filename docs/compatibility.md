@@ -6,6 +6,7 @@
 |---|---|---|---|
 | v4 指令集合 | 全部当前 ParserTarget 指令，另有 Include/Import/Option | 不解析语法 | 只使用 SDK |
 | Token / typed params | 转义、注释、数组、整数/浮点/布尔/字符串、SourceLocation、类型与组件数检查 | 消费 P/N/uv/indices | 消费明确子集 |
+| 法线参数 | 官方拼写 `normal`；`normal3` 为带 warning 的 SDK 扩展，均保留拼写 | 两种输入均可提取 N | 通过 SDK |
 | 未知指令 / v3 WorldEnd | error | — | — |
 | v3 TransformBegin/End | 接受并 warning，按 Attribute 语义 | — | — |
 | 未知合法实体类型 | 完整保留 type/params；不做工厂 schema 验证 | 无 adapter 则 error | 未支持则 error |
@@ -39,3 +40,5 @@
 - 已写 Windows/Linux CI 配置，未运行远程 CI；本机两套编译器都运行在 Windows，不能作为 Linux 运行证据。
 
 官方描述文件回归覆盖：killeroo-simple、killeroo-moving（包含 loopsubdiv Include）、ganesha、head（纹理、subsurface 与材质参数）。这些是语法/IR 证据，不是这些场景已由 Tiny 正确渲染的证据。
+
+另已检查本地 Bathroom / Spaceship：修复 `normal` 拼写遗漏后，全部解析、资源检查及 PLY 几何加载通过；Tiny 原始场景渲染失败。统计与缺口见 [检查报告](example-scenes-validation.md)。

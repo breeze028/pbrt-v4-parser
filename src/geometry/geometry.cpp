@@ -167,7 +167,8 @@ MeshResult extract_triangle_mesh(const Shape& s,const GeometryOptions& o) {
         } else if (s.type=="trianglemesh") {
             auto p=numbers(find_parameter(s,"P"),"point3"); require(p.size()%3==0,"Invalid point count"); require(p.size()/3<=o.max_vertices,"Vertex limit");
             for (std::size_t i=0;i<p.size();i+=3) r.mesh.positions.push_back({p[i],p[i+1],p[i+2]});
-            auto n=numbers(find_parameter(s,"N"),"normal3"); require(n.size()%3==0,"Invalid normal count");
+            auto np=find_parameter(s,"N");
+            auto n=numbers(np,np && np->type=="normal3" ? "normal3" : "normal"); require(n.size()%3==0,"Invalid normal count");
             for (std::size_t i=0;i<n.size();i+=3) r.mesh.normals.push_back({n[i],n[i+1],n[i+2]});
             auto uvp=find_parameter(s,"uv"); auto uv=numbers(uvp,uvp && uvp->type=="float" ? "float" : "point2");
             require(uv.size()%2==0,"Invalid UV count"); for (std::size_t i=0;i<uv.size();i+=2) r.mesh.texcoords.push_back({uv[i],uv[i+1]});

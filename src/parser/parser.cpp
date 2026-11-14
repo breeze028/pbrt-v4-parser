@@ -152,8 +152,9 @@ struct Parser {
         auto decl = r.get(); Parameter p; p.location = decl.location;
         std::istringstream declaration(decl.text); std::string extra;
         if (!(declaration >> p.type >> p.name) || (declaration >> extra)) fail(decl.location,"parameter.declaration","Expected \"type name\"");
-        static const std::vector<std::string> types = {"integer","float","point2","vector2","point3","vector3","normal3","rgb","spectrum","blackbody","bool","string","texture"};
+        static const std::vector<std::string> types = {"integer","float","point2","vector2","point3","vector3","normal","normal3","rgb","spectrum","blackbody","bool","string","texture"};
         if (std::find(types.begin(),types.end(),p.type) == types.end()) fail(p.location,"parameter.type","Unknown v4 parameter type: " + p.type);
+        if(p.type=="normal3") result.diagnostics.push_back({Severity::warning,"parameter.extension","normal3 is an SDK extension; upstream PBRT-v4 uses normal",p.location});
         p.array = r.peek().kind == TokenKind::left_bracket;
         if (p.array) r.get();
         std::optional<bool> spectrum_string;
@@ -179,7 +180,7 @@ struct Parser {
         } while (p.array);
         if (p.array && r.get().kind != TokenKind::right_bracket) fail(p.location,"parameter.array","Unterminated array");
         std::size_t width = (p.type == "point2" || p.type == "vector2") ? 2 :
-            (p.type == "point3" || p.type == "vector3" || p.type == "normal3" || p.type == "rgb") ? 3 :
+            (p.type == "point3" || p.type == "vector3" || p.type == "normal" || p.type == "normal3" || p.type == "rgb") ? 3 :
             (p.type == "spectrum" && spectrum_string == false) ? 2 : 1;
         if (p.values.empty() || p.values.size() % width) fail(p.location,"parameter.arity","Invalid component count for " + p.type);
         if (p.type == "texture" && p.values.size() != 1) fail(p.location,"parameter.arity","Texture reference requires one name");

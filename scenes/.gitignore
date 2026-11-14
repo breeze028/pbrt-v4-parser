@@ -1,0 +1,5 @@
+# Local sample dependencies; populate with tools/copy_example_scenes.ps1.
+/*/models/
+/*/textures/
+/*/asset-manifest.json
+*.lt

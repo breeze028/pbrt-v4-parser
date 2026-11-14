@@ -69,3 +69,11 @@
 4. 启用真实 Windows/Linux CI、ASan/UBSan；继续扩展 Import、资源 schema、引用循环及大型官方场景覆盖，再进行远程发布。
 
 当前未创建远程仓库、未公开发布、未设置版本 tag；LightTransport 工作树保持原状。Git 仅包含 SDK 源码、文档、CI 和小型原创测试数据。
+
+## 后续：Bathroom / Spaceship 本地示例检查
+
+按用户指定，已将两个 PBRT 场景及 models/textures/LICENSE 复制到 `scenes/`，不复制任何 `.lt`。大资源在本机存在但被 Git 忽略；根描述、许可证和复制工具进入版本控制。
+
+真实场景发现并修复了此前只支持 `normal3` 而遗漏官方 `normal` 的错误。修正后两场景均完整解析并加载全部几何，分别为 592,188 / 457,560 个三角形，缺少资源 0；Tiny 原样执行仍因滤波器参数拒绝渲染，另有材质、纹理等消费者缺口。不能将加载成功当作渲染验收。
+
+本次默认测试 MSVC Debug / MSVC Release shared / Windows GCC Debug 均为 33/33；两项可选大型场景 CTest 加载回归均通过。关闭 Geometry 的配置为 22/22。完整分层结论、来源哈希、渲染缺口和复现命令见 [检查报告](example-scenes-validation.md)。

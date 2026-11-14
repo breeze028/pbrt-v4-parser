@@ -12,6 +12,8 @@
 
 语法权威：[PBRT-v4 文件格式](https://pbrt.org/fileformat-v4)和上述固定 commit 的官方源码。文档含部分历史拼写示例，类型以 v4 源码及当前 ParameterDictionary 为准。
 
+2026-11-15 本地 Bathroom/Spaceship 回归纠正了此前的法线拼写判断：`paramdict.cpp:116` 使用官方类型 `normal`；之前只接受 `normal3` 的实现有误，现已修复，`normal3` 仅保留为显式 warning 的扩展。源场景未改写。
+
 ## 官方内部依赖与抽取边界
 
 ```text

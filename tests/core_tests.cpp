@@ -41,11 +41,14 @@ const std::map<std::string,std::function<void()>> tests={
     check(t.next().kind==TokenKind::right_bracket,"right bracket"); check(t.next().kind==TokenKind::end,"EOF"); check(d.empty(),"valid lexing");
 }},
 {"parameters",[]{
-    Collector c; auto r=parse_string(R"(Shape "custom" "integer ids" [+3 -4] "float f" .5 "bool enabled" [true false] "point2 uv" [0 1] "point3 P" [1 2 3] "vector2 a" [2 3] "vector3 b" [4 5 6] "normal3 N" [0 1 0] "rgb c" [0 .5 1] "spectrum s" [400 .2 700 .8] "spectrum named" "metal-Cu-eta" "blackbody L" 6500 "texture reflectance" "albedo" "string filename" "test.ply")",c);
+    Collector c; auto r=parse_string(R"(Shape "custom" "integer ids" [+3 -4] "float f" .5 "bool enabled" [true false] "point2 uv" [0 1] "point3 P" [1 2 3] "vector2 a" [2 3] "vector3 b" [4 5 6] "normal N" [0 1 0] "rgb c" [0 .5 1] "spectrum s" [400 .2 700 .8] "spectrum named" "metal-Cu-eta" "blackbody L" 6500 "texture reflectance" "albedo" "string filename" "test.ply")",c);
     check(bool(r),"all v4 parameter types"); auto& p=c.events.at(0).parameters;
     check(p.size()==14,"parameter count"); check(std::get<std::int64_t>(p[0].values[0])==3,"integer type");
     check(std::get<bool>(p[2].values[0]),"boolean type"); check(p[9].type=="spectrum" && p[9].values.size()==4,"sampled spectrum preserved");
     check(std::get<std::string>(p[10].values[0])=="metal-Cu-eta","named spectrum preserved");
+    check(p[7].type=="normal" && r.diagnostics.empty(),"upstream normal spelling preserved without warnings");
+    Collector extension; auto alias=parse_string(R"(Shape "trianglemesh" "normal3 N" [0 0 1])",extension);
+    check(bool(alias) && code(alias.diagnostics,"parameter.extension") && extension.events[0].parameters[0].type=="normal3","normal3 extension preserved and diagnosed");
 }},
 {"all_directives",[]{
     const std::string source=R"(Option "bool disablepixeljitter" true
@@ -68,7 +71,7 @@ TransformBegin TransformEnd Include "empty.pbrt" Import "empty.pbrt")";
 {"syntax_errors",[]{
     const std::vector<std::string> bad={"WorldEnd","UnknownDirective",R"(Shape "sphere" "point P" [0 0 0])",R"(Shape "sphere" "float x" "one")",
       R"(Shape "sphere" "bool x" "true")",R"(Shape "sphere" "integer x" 1.5)",R"(Shape "sphere" "integer x" 9223372036854775808)",
-      R"(Shape "sphere" "rgb x" [1 2])",R"(Shape "sphere" "point2 x" [])",R"(Shape "sphere" "spectrum x" ["a" 1])",
+      R"(Shape "sphere" "rgb x" [1 2])",R"(Shape "trianglemesh" "normal N" [0 1])",R"(Shape "sphere" "point2 x" [])",R"(Shape "sphere" "spectrum x" ["a" 1])",
       R"(Shape "sphere" "float x" [1 2)",R"(Shape "sphere" "float x" nan)",R"(Shape "sphere" "float x" 1e999)",
       R"(Shape "sphere" "float x" 1e)",R"(Shape "sphere" "texture x" ["a" "b"])","Translate 1 2", "Transform [1 2 3]",
       "ActiveTransform Bad",R"(Option "bool enabled" [true])",R"(Shape "sphere" "float too many names" 1)"};

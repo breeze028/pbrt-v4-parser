@@ -43,6 +43,11 @@ const std::map<std::string,std::function<void()>> tests={
     auto mesh=extract_triangle_mesh(r.scene.shapes[0]); check(bool(mesh),"implicit single triangle indices"); check(mesh.mesh.indices.size()==3,"one triangle"); check(mesh.mesh.texcoords.empty(),"No generated UV");
     r=load_string(R"(WorldBegin Shape "trianglemesh" "point3 P" [0 0 0 1 0 0 0 1 0] "integer indices" [0 1 3])");
     check(bool(r) && !extract_triangle_mesh(r.scene.shapes[0]),"Semantic geometry validation belongs to geometry utility");
+    for(const auto* type:{"normal","normal3"}) {
+        auto source=std::string("WorldBegin Shape \"trianglemesh\" \"point3 P\" [0 0 0 1 0 0 0 1 0] \"")+type+" N\" [0 0 1 0 0 1 0 0 1]";
+        r=load_string(source); check(bool(r),"inline normal source");
+        mesh=extract_triangle_mesh(r.scene.shapes[0]); check(bool(mesh) && mesh.mesh.normals.size()==3,"inline normals reach geometry adapter"); near(mesh.mesh.normals[0].z,1);
+    }
 }},
 {"shared_geometry",[]{
     auto r=load_string(R"(WorldBegin ObjectBegin "o" Translate 1 0 0 Shape "trianglemesh" "point3 P" [0 0 0 1 0 0 0 1 0] ObjectEnd Translate 3 0 0 ObjectInstance "o" Translate 2 0 0 ObjectInstance "o")"); check(bool(r),"instance source");
