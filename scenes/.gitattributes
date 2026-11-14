@@ -1,4 +1,6 @@
 # Keep locally copied upstream descriptions and license notices byte-identical.
+/cornell-box/scene-v4.pbrt -text -whitespace
+/cornell-box/LICENSE.txt -text
 /bathroom/scene-v4.pbrt -text -whitespace
 /spaceship/scene-v4.pbrt -text -whitespace
 /bathroom/LICENSE.txt -text

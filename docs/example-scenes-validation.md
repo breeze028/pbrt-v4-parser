@@ -2,6 +2,8 @@
 
 日期：2026-11-15。检查目标为当前独立 SDK 与 Tiny CPU Renderer，未调用 LightTransport 或官方 PBRT 渲染器。
 
+**后续范围调整：** 用户指定 Tiny 仅需支持 `scenes/cornell-box`，Bathroom / Spaceship 的渲染支持留到 WebGPU 阶段考虑。为 Cornell 新增了 triangle filter，并将深度上限提高到 1024，所以本文记录的滤波器 / 深度失败是当时的历史证据；两场景的复杂材质、纹理等仍未实现，不属于 Tiny 后续目标。
+
 ## 结论与证据层次
 
 **原始场景目前都不能由 Tiny 正常渲染。修正法线参数兼容性后，解析、引用、资源存在性与全部几何读取均通过。** 没有生成这两个场景的新渲染图，也没有把源目录中的 TungstenRender.png 当作本项目结果。

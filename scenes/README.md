@@ -1,6 +1,14 @@
-# Bathroom / Spaceship 示例资产
+# 示例场景与消费者范围
 
-这两个场景目前是 **Parser / Scene IR / PLY Geometry 加载回归样例**。当前 Tiny CPU Renderer 不能按原始参数正常渲染，不能将本目录标为渲染验收通过。
+**Tiny Renderer 的主要验收场景是 `cornell-box/scene-v4.pbrt`**，复制自用户指定的 LightTransport 场景目录，原描述和许可证保留字节内容。它仅需 8 个内联 TriangleMesh（36 个三角形）、diffuse 材质和面积光，没有外部资源。只复制 PBRT 和许可证，不复制 `.ivol` 缓存或已有渲染图。
+
+```powershell
+build-shared/Release/tiny_pathtracer.exe scenes/cornell-box/scene-v4.pbrt out/cornell-box.ppm 64 256
+```
+
+参数为 spp 和预览图像最长边；省略最长边时使用原 Film 的 1024×1024。Tiny 实现该场景的 triangle filter，接受原始 `maxdepth=65`，仍使用自有独立 RNG 和线性 sRGB 输出近似，不复现 PBRT 的 Sobol 或完整输出管线。原来的 `testdata/cornell.pbrt` 保留为小型合成回归。
+
+**Bathroom / Spaceship 的渲染支持留到 WebGPU 阶段考虑，不再扩展 Tiny 来覆盖它们。** 两者目前是 Parser / Scene IR / PLY Geometry 加载回归样例，不能标为渲染验收通过。
 
 | 场景 | 本地路径 | 原作者（随包许可证记载） | 实际检查 |
 |---|---|---|---|
@@ -19,7 +27,7 @@ PowerShell 7：
 ./tools/copy_example_scenes.ps1 -SourceRoot 'D:\assets\pbrt-scenes'
 ```
 
-默认来源为 `F:\code\LightTransport\scenes`。脚本只复制两个场景的 `scene-v4.pbrt`、`LICENSE.txt`、`models/` 和 `textures/`，**排除所有 `.lt` 文件**，也不复制已有 Tungsten 渲染图。源目录只读。每份复制件均经过 SHA-256 校验，结果写入被忽略的 `asset-manifest.json`；已有不同文件会报错并保留，不直接覆盖。
+默认来源为 `F:\code\LightTransport\scenes`。脚本复制 Cornell Box、Bathroom、Spaceship 的 `scene-v4.pbrt`、`LICENSE.txt` 及适用的 `models/`、`textures/`，**排除所有 `.lt` 和 `.ivol` 文件**，也不复制已有 Tungsten 渲染图。源目录只读。每份复制件均经过 SHA-256 校验，结果写入被忽略的 `asset-manifest.json`；已有不同文件会报错并保留，不直接覆盖。
 
 ## 检查入口
 
@@ -42,10 +50,10 @@ ctest --preset msvc -L example_scene
 
 ## 当前渲染缺口
 
-两者以原始文件运行 Tiny 均返回 exit 1，首先报告 `Tiny renderer uses a box pixel filter`。两份文件声明了 triangle filter 及 x/y radius；当前示例拒绝这些参数。
+初次检查时，两者以原始文件运行 Tiny 均首先在 triangle filter 处退出（历史证据见报告）。为 Cornell Box 新增 triangle filter 后，这一限制已消除，但下列材质等缺口仍在，因此它们不属于 Tiny 的渲染目标。
 
 - 两者均使用 `coateddiffuse`、`conductor`、`dielectric`，Tiny 当前只实现 diffuse；单独解决滤波器不足以完成渲染。
 - Bathroom 有 12 个 imagemap 声明、10 个唯一 TGA 文件、一个 Shape 的纹理 alpha、两个材质的 displacement，以及银的具名光谱。当前 Tiny 没有这些求值实现。
-- Spaceship 无图片纹理，使用常量 infinite 与 4 个面积光声明；这些光源类型已有基础支持。但其 `maxdepth=65` 还超过当前 Tiny 的 64 上限。
+- Spaceship 无图片纹理，使用常量 infinite 与 4 个面积光声明；这些光源类型已有基础支持。其 `maxdepth=65` 现可接受（当前上限 1024），材质仍未支持。
 
 没有修改两份源描述、替换材质或去掉纹理来制造“通过”结果。详细证据与修正记录见 [场景检查报告](../docs/example-scenes-validation.md)。

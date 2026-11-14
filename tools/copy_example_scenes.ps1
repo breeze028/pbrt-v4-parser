@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $SourceRoot = [System.IO.Path]::GetFullPath($SourceRoot)
 $DestinationRoot = [System.IO.Path]::GetFullPath($DestinationRoot)
-foreach ($name in @('bathroom', 'spaceship')) {
+foreach ($name in @('cornell-box', 'bathroom', 'spaceship')) {
     $source = Join-Path $SourceRoot $name
     $destination = Join-Path $DestinationRoot $name
     $files = @(
@@ -39,7 +39,7 @@ foreach ($name in @('bathroom', 'spaceship')) {
     $manifest = [ordered]@{
         source = $source
         copied_utc = [DateTime]::UtcNow.ToString('o')
-        exclusions = @('*.lt', 'TungstenRender.exr', 'TungstenRender.png')
+        exclusions = @('*.lt', '*.ivol', 'TungstenRender.exr', 'TungstenRender.png')
         file_count = @($entries).Count
         total_bytes = ($entries | Measure-Object -Property bytes -Sum).Sum
         files = @($entries)

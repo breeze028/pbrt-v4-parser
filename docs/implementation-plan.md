@@ -77,3 +77,21 @@
 真实场景发现并修复了此前只支持 `normal3` 而遗漏官方 `normal` 的错误。修正后两场景均完整解析并加载全部几何，分别为 592,188 / 457,560 个三角形，缺少资源 0；Tiny 原样执行仍因滤波器参数拒绝渲染，另有材质、纹理等消费者缺口。不能将加载成功当作渲染验收。
 
 本次默认测试 MSVC Debug / MSVC Release shared / Windows GCC Debug 均为 33/33；两项可选大型场景 CTest 加载回归均通过。关闭 Geometry 的配置为 22/22。完整分层结论、来源哈希、渲染缺口和复现命令见 [检查报告](example-scenes-validation.md)。
+
+## 当前范围：Tiny 验收 Cornell Box
+
+用户将 Tiny Renderer 的主要验收目标限定为 `F:\code\LightTransport\scenes\cornell-box`；Bathroom / Spaceship 的渲染支持留到 WebGPU 阶段考虑，当前仍只做加载回归。无需继续为 Tiny 扩展复杂材质和纹理。
+
+已将 Cornell 的原始 `scene-v4.pbrt` 和 `LICENSE.txt` 复制至 `scenes/cornell-box/`（共 7,763 字节），未复制 `.ivol`、已有 EXR/PNG 或任何 `.lt`。源与复制件 PBRT SHA-256 均为 `B2FC6654C966468119187D169A76ECEC82E169A1058F3344E27E5103189D4E43`。随包许可证记载原作者 Benedikt Bitterli、CC0，原文保留。
+
+原场景全部为 diffuse、内联 TriangleMesh 和面积光，无外部资源。实际加载得到 8 个 mesh、72 个顶点、36 个三角形、9 个材质（含默认）、1 个面积光声明，诊断 0。
+
+Tiny 为该场景新增 separable triangle filter：以逆 CDF 重要性采样 `max(0, radius - abs(offset))` 核，支持 x/y radius，不改写 Parser/IR。深度上限从 64 提高到 1024，接受原始 maxdepth=65，不进行截断。新增可选最长边参数，只改变消费者输出分辨率，不改源文件。
+
+```powershell
+build-shared/Release/tiny_pathtracer.exe scenes/cornell-box/scene-v4.pbrt out/cornell-box.ppm 64 256
+```
+
+实际输出 256×256 / 64 spp 图像并查看 PNG 转换件 `out/cornell-box.png`：可观察到红绿墙、两个方盒、面积光及间接照明。消费者构建 36 个三角形、23 个 BVH 节点。仍使用独立 RNG、sRGB 近似和 2.2 gamma，不宣称复现 PBRT Sobol 或输出管线；已有缺省 filter 预览行为保留。
+
+新增 `tiny_cornell_box` CTest，直接加载未修改的原场景，使用原 triangle filter/maxdepth、1 spp、32×32 冒烟渲染。Windows GCC 默认测试 34/34，MSVC Release shared 含两项本地大场景加载测试为 36/36。原合成 Cornell、球体/PLY 小样例继续作为回归保留。复制脚本、README 与兼容性文档已同步范围约定。

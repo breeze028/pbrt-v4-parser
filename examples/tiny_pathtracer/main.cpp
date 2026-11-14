@@ -184,7 +184,7 @@ int integer_setting(const Entity& e,std::string_view name,int fallback,int limit
 }
 int main(int argc,char** argv) {
     try {
-        if(argc<3 || argc>4) { std::cerr<<"Usage: tiny_pathtracer scene.pbrt output.ppm [samples-per-pixel]\n"; return 2; }
+        if(argc<3 || argc>5) { std::cerr<<"Usage: tiny_pathtracer scene.pbrt output.ppm [samples-per-pixel] [max-image-edge]\n"; return 2; }
         auto loaded=load(argv[1]); for(auto& d:loaded.diagnostics) std::cerr<<format(d)<<'\n'; require(bool(loaded),"Scene load failed"); auto& scene=loaded.scene;
         require(scene.camera.type=="perspective","Tiny renderer requires perspective camera");
         supported(scene.camera,{"fov"}); supported(scene.film,{"xresolution","yresolution","filename"});
@@ -193,10 +193,20 @@ int main(int argc,char** argv) {
         require(scene.accelerator.type=="bvh","Tiny renderer uses its own BVH accelerator");
         require(scene.integrator.type=="path" || scene.integrator.type=="volpath","Tiny renderer requires path or default volpath settings without media");
         require(scene.options.empty(),"Tiny renderer does not apply Option directives");
-        require(scene.pixel_filter.parameters.empty(),"Tiny renderer uses a box pixel filter");
-        std::cerr<<"Preview uses cosine Lambertian sampling, median BVH, independent RNG, box filter and linear sRGB; PBRT sampler/integrator/filter algorithms are not reproduced.\n";
+        bool triangle_filter=scene.pixel_filter.type=="triangle";
+        double xr=1,yr=1;
+        if(triangle_filter) {
+            supported(scene.pixel_filter,{"xradius","yradius"});
+            xr=scalar(scene.pixel_filter,"xradius").value_or(2); yr=scalar(scene.pixel_filter,"yradius").value_or(2);
+            require(xr>0 && xr<=16 && yr>0 && yr<=16,"Triangle filter radius must be in (0,16]");
+        } else require(scene.pixel_filter.parameters.empty(),"Tiny renderer supports box and triangle filter parameters only");
+        std::cerr<<"Preview uses cosine Lambertian sampling, median BVH, independent RNG, "<<(triangle_filter?"triangle":"box")<<" filter and linear sRGB; PBRT sampler/integrator/output algorithms are not reproduced.\n";
         int width=integer_setting(scene.film,"xresolution",128,4096),height=integer_setting(scene.film,"yresolution",128,4096);
-        int samples=argc==4 ? std::stoi(argv[3]) : integer_setting(scene.sampler,"pixelsamples",32,100000),depth=integer_setting(scene.integrator,"maxdepth",8,64);
+        int samples=argc>=4 ? std::stoi(argv[3]) : integer_setting(scene.sampler,"pixelsamples",32,100000),depth=integer_setting(scene.integrator,"maxdepth",8,1024);
+        if(argc==5) {
+            int edge=std::stoi(argv[4]); require(edge>=1 && edge<=4096,"Invalid preview image size");
+            double factor=double(edge)/std::max(width,height); width=std::max(1,int(std::round(width*factor))); height=std::max(1,int(std::round(height*factor)));
+        }
         require(samples>0 && samples<=100000,"Invalid sample count");
         double fov=scalar(scene.camera,"fov").value_or(90); require(fov>0 && fov<179,"Invalid field of view");
         double scale=std::tan(fov*pi/360),aspect=double(width)/height;
@@ -208,7 +218,11 @@ int main(int argc,char** argv) {
             for(int x=0;x<width;++x) {
                 Vec3 color{};
                 for(int sample=0;sample<samples;++sample) {
-                    double sx=(2*(x+random())/width-1)*scale*(aspect>1?aspect:1),sy=(1-2*(y+random())/height)*scale*(aspect<1?1/aspect:1);
+                    // Importance sample the normalized separable triangle kernel.
+                    // Its inverse CDF yields offsets in [-radius, radius].
+                    auto offset=[&](double radius) { double u=random(); return radius*(u<.5 ? std::sqrt(2*u)-1 : 1-std::sqrt(2-2*u)); };
+                    double px=x+.5+(triangle_filter?offset(xr):random()-.5),py=y+.5+(triangle_filter?offset(yr):random()-.5);
+                    double sx=(2*px/width-1)*scale*(aspect>1?aspect:1),sy=(1-2*py/height)*scale*(aspect<1?1/aspect:1);
                     Ray ray{transform_point(camera,{}),normalize(transform_vector(camera,{sx,sy,1}))}; color=color+trace(world,ray,random,depth);
                 }
                 color=color/samples;

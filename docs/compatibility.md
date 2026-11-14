@@ -36,9 +36,11 @@
 - Import 的名称可见性遵循格式文档；官方的全局延后工厂路径可能容许更宽松的交叉引用，本库明确拒绝。尚未执行大型并行 Import 场景回归。
 - 默认路径固定到根文件目录，与官方 ResolveFilename 找不到后尝试 cwd 的 fallback 不同。
 - PLY 四边形按 0-2 对角线拆分，复杂凹多边形不支持。未读取 face-varying UV、颜色或任意额外属性；额外属性按 PLY 类型正确跳过。缺失的法线/UV 不生成。
-- Tiny 不复现 PBRT 的滤波器、采样器、Integrator 或色彩输出管线；使用盒滤波、独立 RNG、基本 diffuse 估计器和 2.2 显示 gamma。只适合 SDK 教学与小场景预览。
+- Tiny 支持 separable triangle filter 的重要性采样，其余无参数滤波器声明仍按已提示的盒滤波预览；不复现 PBRT 的 Sobol、Integrator 或色彩输出管线。使用独立 RNG、基本 diffuse 估计器和 2.2 显示 gamma。只适合 SDK 教学与小场景预览。
 - 已写 Windows/Linux CI 配置，未运行远程 CI；本机两套编译器都运行在 Windows，不能作为 Linux 运行证据。
 
 官方描述文件回归覆盖：killeroo-simple、killeroo-moving（包含 loopsubdiv Include）、ganesha、head（纹理、subsurface 与材质参数）。这些是语法/IR 证据，不是这些场景已由 Tiny 正确渲染的证据。
 
 另已检查本地 Bathroom / Spaceship：修复 `normal` 拼写遗漏后，全部解析、资源检查及 PLY 几何加载通过；Tiny 原始场景渲染失败。统计与缺口见 [检查报告](example-scenes-validation.md)。
+
+当前范围约定：Tiny 以 `scenes/cornell-box/scene-v4.pbrt` 为主要渲染验收场景；Bathroom / Spaceship 留待 WebGPU 消费者考虑。Cornell 原始 triangle filter 和 maxdepth=65 已支持；不因此新增复杂 BSDF、图片纹理、alpha 或 displacement 到 Tiny。

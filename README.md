@@ -30,7 +30,7 @@ cmake --preset msvc
 cmake --build --preset msvc
 ctest --preset msvc
 build-msvc/Debug/pbrt4_info.exe testdata/cornell.pbrt
-build-msvc/Debug/tiny_pathtracer.exe testdata/cornell.pbrt out.ppm 32
+build-msvc/Debug/tiny_pathtracer.exe scenes/cornell-box/scene-v4.pbrt out.ppm 64 256
 ```
 
 Linux 或已设置编译器环境的 Ninja：
@@ -39,10 +39,10 @@ Linux 或已设置编译器环境的 Ninja：
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-./build/tiny_pathtracer testdata/cornell.pbrt out.ppm 32
+./build/tiny_pathtracer scenes/cornell-box/scene-v4.pbrt out.ppm 64 256
 ```
 
-约 220 行的 [Tiny Path Tracer](examples/tiny_pathtracer/main.cpp) 使用同一 C++ SDK，提供中位数 BVH、Lambertian、面积光直接采样、常量环境光、Monte Carlo 反弹与 Russian roulette，输出 P6 PPM。球体离散化只在 Geometry 消费层显式开启。它会拒绝不支持的材质/纹理/动画等渲染输入，不能视为 PBRT 的渲染结果复现。
+约 250 行的 [Tiny Path Tracer](examples/tiny_pathtracer/main.cpp) 以 `scenes/cornell-box/scene-v4.pbrt` 为主要验收场景，使用同一 C++ SDK，提供中位数 BVH、Lambertian、面积光直接采样、常量环境光、triangle filter、Monte Carlo 反弹与 Russian roulette，输出 P6 PPM。可选末尾参数为预览图像最长边；省略则保留 Film 分辨率。球体离散化只在 Geometry 消费层显式开启。它会拒绝不支持的材质/纹理/动画等渲染输入，不能视为 PBRT 的渲染结果复现。
 
 普通 CMake 集成：
 
@@ -87,3 +87,5 @@ python tools/official_regression.py --info build/pbrt4_info
 Windows 指定 `--info build-msvc/Debug/pbrt4_info.exe`。该测试验证解析与 IR，不验证官方场景的外部 PLY/贴图解码或渲染。第三方场景保留其各自许可证；SDK 新实现使用 Apache-2.0。
 
 本地 [Bathroom / Spaceship 示例](scenes/README.md) 可通过复制脚本准备资产，并用 `pbrt4_info --details --check-resources --geometry scene.pbrt` 检查资源与全部网格。这两份原始场景目前通过加载回归，**Tiny 尚不能正常渲染**，具体缺口见 [检查报告](docs/example-scenes-validation.md)。
+
+Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 的渲染支持在后续 WebGPU 阶段考虑。
