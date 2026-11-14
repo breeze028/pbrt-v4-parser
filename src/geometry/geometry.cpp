@@ -98,7 +98,9 @@ TriangleMesh read_ply(std::istream& in,const GeometryOptions& o) {
             require(!elements.empty(),"PLY property outside element"); Property p; std::string type;
             require(bool(row>>type),"Invalid PLY property");
             if (type=="list") { std::string count; require(bool(row>>count>>type),"Invalid PLY list"); p.list=true; p.count=ply_type(count); require(!p.count.floating,"List count must be integer"); }
-            p.type=ply_type(type); require(bool(row>>p.name),"Missing PLY property name"); elements.back().properties.push_back(p);
+            p.type=ply_type(type); require(bool(row>>p.name),"Missing PLY property name");
+            require(std::none_of(elements.back().properties.begin(),elements.back().properties.end(),[&](auto& previous){return previous.name==p.name;}),"Duplicate PLY property");
+            elements.back().properties.push_back(p);
         } else throw Bad("Unknown PLY header directive: "+key);
     }
     require(format,"Missing PLY format"); TriangleMesh mesh; bool vertices=false,faces=false;
@@ -108,8 +110,10 @@ TriangleMesh read_ply(std::istream& in,const GeometryOptions& o) {
         if (vertex) { require(!vertices,"Duplicate PLY vertex element"); vertices=true; require(has("x")&&has("y")&&has("z"),"PLY missing x/y/z"); }
         if (face) { require(!faces,"Duplicate PLY face element"); faces=true; }
         bool normals=has("nx")&&has("ny")&&has("nz");
+        if(vertex) require(normals || !(has("nx") || has("ny") || has("nz")),"Incomplete PLY normals");
         std::string u=has("u") ? "u" : has("s") ? "s" : "texture_u", v=has("v") ? "v" : has("t") ? "t" : "texture_v";
         bool uv=has(u.c_str())&&has(v.c_str());
+        if(vertex) require(uv || !(has(u.c_str()) || has(v.c_str())),"Incomplete PLY texture coordinates");
         for (std::size_t row=0;row<e.count;++row) {
             std::map<std::string,double> values; std::vector<std::uint32_t> indices;
             for (const auto& p:e.properties) {
@@ -131,7 +135,7 @@ TriangleMesh read_ply(std::istream& in,const GeometryOptions& o) {
             }
             if (face) {
                 require(indices.size()==3 || indices.size()==4,"PLY face has no supported vertex index list");
-                require(mesh.indices.size()+6<=o.max_indices,"PLY index limit");
+                require(mesh.indices.size()+(indices.size()==4?6:3)<=o.max_indices,"PLY index limit");
                 mesh.indices.insert(mesh.indices.end(),{indices[0],indices[1],indices[2]});
                 if (indices.size()==4) mesh.indices.insert(mesh.indices.end(),{indices[0],indices[2],indices[3]});
             }
@@ -151,7 +155,7 @@ MeshResult load_ply(const std::filesystem::path& p,const GeometryOptions& o) {
             auto size=in.tellg(); require(size>=0 && static_cast<std::uintmax_t>(size)<=o.resources.max_file_bytes,"PLY file size limit");
             in.seekg(0); in.imbue(std::locale::classic()); r.mesh=read_ply(in,o);
         }
-    } catch (const std::exception& e) { diag(r.diagnostics,{p.string(),1,1},e.what()); }
+    } catch (const std::exception& e) { diag(r.diagnostics,{path_to_utf8(p),1,1},e.what()); }
     return r;
 }
 MeshResult extract_triangle_mesh(const Shape& s,const GeometryOptions& o) {
@@ -219,6 +223,7 @@ GeometryResult extract_geometry(const Scene& s,const GeometryOptions& o) {
 }
 MeshResult bake_instance(const TriangleMesh& m,const MeshInstance& i) {
     MeshResult r;
+    try { validate(m,{}); } catch(const std::exception& e) { diag(r.diagnostics,{},e.what()); return r; }
     if (i.transform.animated()) { diag(r.diagnostics,{},"Animated geometry baking requires a renderer time sampler"); return r; }
     auto& t=i.transform.start;
     if (!inverse(t) || t.m[12]!=0 || t.m[13]!=0 || t.m[14]!=0 || t.m[15]!=1) { diag(r.diagnostics,{},"Baking requires an invertible affine matrix"); return r; }

@@ -10,6 +10,9 @@
 #include <vector>
 
 namespace pbrt4 {
+// PBRT string/path literals and SourceLocation filenames use UTF-8 on every OS.
+std::filesystem::path path_from_utf8(std::string_view);
+std::string path_to_utf8(const std::filesystem::path&);
 struct SourceLocation {
     std::string filename;
     std::size_t line = 1, column = 1;

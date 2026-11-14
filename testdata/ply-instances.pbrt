@@ -1,0 +1,15 @@
+Film "rgb" "integer xresolution" 32 "integer yresolution" 32
+LookAt .5 .4 -2 .5 .4 0 0 1 0
+Camera "perspective" "float fov" 45
+WorldBegin
+LightSource "infinite" "rgb L" [.5 .6 1]
+Material "diffuse" "rgb reflectance" [.8 .5 .2]
+ObjectBegin "triangle"
+ Shape "plymesh" "string filename" "triangle.ply"
+ObjectEnd
+ObjectInstance "triangle"
+AttributeBegin
+ Translate .7 .2 .2
+ Scale .3 .3 .3
+ ObjectInstance "triangle"
+AttributeEnd

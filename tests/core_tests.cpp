@@ -3,6 +3,8 @@
 #include <cmath>
 #include <functional>
 #include <future>
+#include <fstream>
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <random>
@@ -76,6 +78,17 @@ TransformBegin TransformEnd Include "empty.pbrt" Import "empty.pbrt")";
     for(auto s:{std::string("Shape \"unterminated"),std::string("Shape \"new\nline\""),std::string("Shape \"bad\\q\""),std::string("WorldBegin\0Shape",16)}) {
         Collector c; auto r=parse_string(s,c); check(!r,"invalid lexing must fail");
     }
+    Collector c; auto r=parse_string(std::string("Shape \"")+char(0xff)+"\"",c); check(!r && code(r.diagnostics,"lex.utf8"),"Malformed UTF-8 diagnostic");
+}},
+{"unicode_paths",[]{
+    auto folder=std::filesystem::temp_directory_path()/std::filesystem::path("pbrt4-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    std::filesystem::create_directory(folder);
+    auto root=folder/std::filesystem::path(u8"\u573a\u666f.pbrt"),nested=folder/std::filesystem::path(u8"\u6a21\u578b.pbrt");
+    auto nested_name=path_to_utf8(nested.filename());
+    { std::ofstream out(root); out<<"WorldBegin Include \""<<nested_name<<"\""; }
+    { std::ofstream out(nested); out<<"Shape \"sphere\""; }
+    auto r=load(root); std::filesystem::remove(root); std::filesystem::remove(nested); std::filesystem::remove(folder);
+    good(r); check(r.scene.shapes[0].location.filename==path_to_utf8(nested),"UTF-8 filename roundtrip");
 }},
 {"transform",[]{
     auto r=load_string(R"(WorldBegin Translate 1 2 3 Scale 2 3 4 Shape "sphere")"); good(r);
@@ -83,6 +96,7 @@ TransformBegin TransformEnd Include "empty.pbrt" Import "empty.pbrt")";
     r=load_string(R"(WorldBegin Transform [1 0 0 0 0 1 0 0 0 0 1 0 4 5 6 1] ConcatTransform [2 0 0 0 0 2 0 0 0 0 2 0 0 0 0 1] Shape "sphere")"); good(r);
     p=transform_point(r.scene.shapes[0].transform.start,{1,1,1}); near(p.x,6); near(p.y,7); near(p.z,8);
     r=load_string(R"(WorldBegin Rotate 90 0 0 1 Shape "sphere")"); good(r); p=transform_point(r.scene.shapes[0].transform.start,{1,0,0}); near(p.x,0); near(p.y,1);
+    r=load_string(R"(WorldBegin Rotate 90 0 0 1e-200 Shape "sphere")"); good(r); p=transform_point(r.scene.shapes[0].transform.start,{1,0,0}); near(p.x,0); near(p.y,1);
 }},
 {"camera",[]{
     auto r=load_string(R"(LookAt 0 1 -5 0 1 0 0 1 0 Camera "perspective" WorldBegin Shape "sphere")"); good(r);
@@ -152,7 +166,8 @@ AttributeBegin Translate 1 0 0 ReverseOrientation Material "diffuse" AreaLightSo
         R"(WorldBegin MakeNamedMaterial "m" "string type" "diffuse" MakeNamedMaterial "m" "string type" "diffuse")",
         R"(WorldBegin MediumInterface "missing" Shape "sphere")",R"(WorldBegin CoordSysTransform "missing")",R"(WorldBegin Scale 0 1 1 Shape "sphere")",
         R"(WorldBegin Rotate 90 0 0 0)",R"(LookAt 0 0 0 0 0 1 0 0 1 Camera "perspective" WorldBegin)",R"(ColorSpace "unknown" WorldBegin)",
-        R"(WorldBegin Attribute "wrong")",R"(WorldBegin Texture "a" "rgb" "constant")",R"(TransformTimes 1 0 WorldBegin)"};
+        R"(WorldBegin Attribute "wrong")",R"(WorldBegin Texture "a" "rgb" "constant")",R"(TransformTimes 1 0 WorldBegin)",
+        R"(WorldBegin ObjectInstance "")",R"(WorldBegin NamedMaterial "" Shape "sphere")",R"(WorldBegin ObjectBegin "" ObjectEnd)"};
     for(auto& s:bad) { auto r=load_string(s); check(!r,"invalid scene must fail"); }
 }},
 {"file_errors",[]{

@@ -73,6 +73,8 @@ struct SceneBuilder::Impl {
         static const std::set<std::string> world_only={"Shape","Material","MakeNamedMaterial","NamedMaterial","Texture","LightSource","AreaLightSource","Attribute","AttributeBegin","AttributeEnd","TransformBegin","TransformEnd","ObjectBegin","ObjectEnd","ObjectInstance","ReverseOrientation","Import"};
         if (options_only.contains(k) && !require(!world,d,"only valid before WorldBegin")) return;
         if (world_only.contains(k) && !require(world,d,"requires WorldBegin")) return;
+        static const std::set<std::string> named={"ObjectBegin","ObjectInstance","NamedMaterial","MakeNamedMaterial","MakeNamedMedium","Texture"};
+        if(named.contains(k) && text(d).empty()) { error(d.location,"reference.empty","Empty declaration/reference name for "+k); return; }
         if (k=="Include" || k=="Import") return;
         if (k=="WorldBegin") {
             if (!require(!world,d,"duplicate WorldBegin")) return;
@@ -89,8 +91,9 @@ struct SceneBuilder::Impl {
         }
         if (k=="Rotate") {
             Vec3 a{num(d,1),num(d,2),num(d,3)};
+            a=normalize(a);
             if (dot(a,a)==0) { error(d.location,"transform.axis","Rotation axis is zero"); return; }
-            a=normalize(a); double angle=num(d,0)*std::numbers::pi/180, c=std::cos(angle),t=1-c,v=std::sin(angle);
+            double angle=std::remainder(num(d,0),360)*std::numbers::pi/180, c=std::cos(angle),t=1-c,v=std::sin(angle);
             Matrix4 m; m.m={t*a.x*a.x+c,t*a.x*a.y-v*a.z,t*a.x*a.z+v*a.y,0,
                 t*a.x*a.y+v*a.z,t*a.y*a.y+c,t*a.y*a.z-v*a.x,0,
                 t*a.x*a.z-v*a.y,t*a.y*a.z+v*a.x,t*a.z*a.z+c,0, 0,0,0,1};
@@ -105,7 +108,9 @@ struct SceneBuilder::Impl {
             Vec3 z=normalize(to-p), x=normalize(cross(normalize(up),z)), y=cross(z,x);
             if (dot(z,z)==0 || dot(x,x)==0) { error(d.location,"transform.lookat","Degenerate LookAt basis"); return; }
             Matrix4 m; m.m={x.x,y.x,z.x,p.x,x.y,y.y,z.y,p.y,x.z,y.z,z.z,p.z,0,0,0,1};
-            apply(*inverse(m)); return;
+            auto inv=inverse(m);
+            if(!inv) { error(d.location,"transform.lookat","LookAt inverse is not finite"); return; }
+            apply(*inv); return;
         }
         if (k=="ActiveTransform") { auto a=text(d); state.active=a=="All" ? 3 : a=="StartTime" ? 1 : 2; return; }
         if (k=="TransformTimes") {
@@ -232,7 +237,7 @@ struct SceneBuilder::Impl {
             }
             if (p->type=="string" || p->type=="spectrum") for (const auto& v:p->values) if (const auto* str=std::get_if<std::string>(&v)) {
                 if (p->type=="spectrum" || name=="filename" || name.ends_with("filename") || name=="mapname") {
-                    auto path=std::filesystem::path(*str);
+                    auto path=path_from_utf8(*str);
                     e.resources.push_back({name,*str,(path.is_absolute() ? path : result.scene.base_directory/path).lexically_normal(),p->location,p->type=="spectrum"});
                 }
             }

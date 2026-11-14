@@ -9,6 +9,10 @@
 #include <unordered_map>
 
 namespace pbrt4 {
+std::filesystem::path path_from_utf8(std::string_view s) { return std::filesystem::path(std::u8string(s.begin(),s.end())); }
+std::string path_to_utf8(const std::filesystem::path& p) {
+    auto s=p.u8string(); return {reinterpret_cast<const char*>(s.data()),s.size()};
+}
 bool has_errors(const std::vector<Diagnostic>& d) {
     return std::any_of(d.begin(), d.end(), [](const auto& x) { return x.severity == Severity::error; });
 }
@@ -20,6 +24,22 @@ std::string format(const Diagnostic& d) {
 Tokenizer::Tokenizer(std::string s, std::string f, std::vector<Diagnostic>& d)
     : input_(std::move(s)), location_{std::move(f), 1, 1}, diagnostics_(d) {
     if (input_.starts_with("\xef\xbb\xbf")) position_ = 3;
+    // Reject malformed UTF-8 even inside quoted names, where it would otherwise
+    // survive lexical classification and create platform-dependent file paths.
+    auto loc=location_;
+    for(std::size_t i=position_;i<input_.size();) {
+        unsigned char c=static_cast<unsigned char>(input_[i]);
+        if(c<128) { ++i; if(c=='\n') {++loc.line;loc.column=1;} else ++loc.column; continue; }
+        unsigned count=c>=0xc2 && c<=0xdf ? 2 : c>=0xe0 && c<=0xef ? 3 : c>=0xf0 && c<=0xf4 ? 4 : 0;
+        bool valid=count && i+count<=input_.size();
+        for(unsigned j=1;valid && j<count;++j) { auto b=static_cast<unsigned char>(input_[i+j]); valid=b>=0x80 && b<=0xbf; }
+        if(valid && count>=3) {
+            auto b=static_cast<unsigned char>(input_[i+1]);
+            valid=!(c==0xe0 && b<0xa0) && !(c==0xed && b>=0xa0) && !(c==0xf0 && b<0x90) && !(c==0xf4 && b>=0x90);
+        }
+        if(!valid) { diagnostics_.push_back({Severity::error,"lex.utf8","Invalid UTF-8 input",loc}); break; }
+        i+=count; loc.column+=count;
+    }
 }
 char Tokenizer::take() {
     char c = input_[position_++];
@@ -176,10 +196,10 @@ struct Parser {
                 auto length = in.tellg();
                 if (length < 0 || static_cast<std::uintmax_t>(length) > options.max_file_bytes) fail(event.location,"file.size","File exceeds configured size limit");
                 data.emplace(static_cast<std::size_t>(length),'\0'); in.seekg(0);
-                if (!in.read(data->data(),static_cast<std::streamsize>(data->size()))) fail(event.location,"file.read","Failed reading " + event.path.string());
+                if (!in.read(data->data(),static_cast<std::streamsize>(data->size()))) fail(event.location,"file.read","Failed reading " + path_to_utf8(event.path));
             }
         }
-        if (!data) fail(event.location,"file.open","Cannot open " + event.path.string());
+        if (!data) fail(event.location,"file.open","Cannot open " + path_to_utf8(event.path));
         if (data->size() > options.max_file_bytes) fail(event.location,"file.size","File exceeds configured size limit");
         return std::move(*data);
     }
@@ -188,11 +208,11 @@ struct Parser {
         auto canonical = std::filesystem::weakly_canonical(event.path,ec);
         if (ec) canonical = event.path.lexically_normal();
         if (files.size() >= options.max_include_depth) fail(event.location,"file.depth","Include/Import depth limit exceeded");
-        if (std::find(files.begin(),files.end(),canonical) != files.end()) fail(event.location,"file.cycle","Include/Import cycle: " + event.path.string());
+        if (std::find(files.begin(),files.end(),canonical) != files.end()) fail(event.location,"file.cycle","Include/Import cycle: " + path_to_utf8(event.path));
         if (!contents) contents = read(event);
         if (contents->size() > options.max_file_bytes) fail(event.location,"file.size","Input exceeds configured size limit");
         files.push_back(canonical); target.on_file_begin(event);
-        Reader r(std::move(*contents),event.path.string(),result.diagnostics);
+        Reader r(std::move(*contents),path_to_utf8(event.path),result.diagnostics);
         while (r.peek().kind != TokenKind::end) {
             auto t = r.get(); auto it = signatures().find(t.text);
             if (t.kind != TokenKind::word || it == signatures().end()) fail(t.location,"syntax.directive","Unknown PBRT-v4 directive: " + t.text);
@@ -219,7 +239,7 @@ struct Parser {
             if (sig.params) while (r.peek().kind == TokenKind::string) d.parameters.push_back(parameter(r));
             target.on_directive(d);
             if (d.keyword == "Include" || d.keyword == "Import") {
-                auto path = resolve(std::get<std::string>(d.arguments[0]));
+                auto path = resolve(path_from_utf8(std::get<std::string>(d.arguments[0])));
                 file({d.keyword == "Include" ? FileKind::include : FileKind::import,path,d.location});
             }
         }
@@ -231,9 +251,9 @@ SyntaxResult run(const std::filesystem::path& path, ParserTarget& t, const LoadO
     try {
         auto full = std::filesystem::absolute(path).lexically_normal();
         p.base = options.base_directory.empty() ? full.parent_path() : std::filesystem::absolute(options.base_directory).lexically_normal();
-        p.file({FileKind::root,full,{full.string(),1,1}},std::move(input));
+        p.file({FileKind::root,full,{path_to_utf8(full),1,1}},std::move(input));
     } catch (const Abort&) {} catch (const std::exception& e) {
-        p.result.diagnostics.push_back({Severity::error,"parse.exception",e.what(),{path.string(),1,1}});
+        p.result.diagnostics.push_back({Severity::error,"parse.exception",e.what(),{path_to_utf8(path),1,1}});
     }
     return std::move(p.result);
 }
@@ -243,5 +263,5 @@ const std::vector<std::string>& supported_directives() {
     return names;
 }
 SyntaxResult parse_file(const std::filesystem::path& p, ParserTarget& t, const LoadOptions& o) { return run(p,t,o,{}); }
-SyntaxResult parse_string(std::string_view s, ParserTarget& t, std::string f, const LoadOptions& o) { return run(f,t,o,std::string(s)); }
+SyntaxResult parse_string(std::string_view s, ParserTarget& t, std::string f, const LoadOptions& o) { return run(path_from_utf8(f),t,o,std::string(s)); }
 }

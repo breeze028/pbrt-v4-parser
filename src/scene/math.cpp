@@ -9,10 +9,14 @@ Vec3 operator-(Vec3 a,Vec3 b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
 Vec3 operator-(Vec3 a) { return {-a.x,-a.y,-a.z}; }
 Vec3 operator*(Vec3 a,double b) { return {a.x*b,a.y*b,a.z*b}; }
 Vec3 operator*(Vec3 a,Vec3 b) { return {a.x*b.x,a.y*b.y,a.z*b.z}; }
-Vec3 operator/(Vec3 a,double b) { return a*(1/b); }
+Vec3 operator/(Vec3 a,double b) { return {a.x/b,a.y/b,a.z/b}; }
 double dot(Vec3 a,Vec3 b) { return a.x*b.x+a.y*b.y+a.z*b.z; }
 Vec3 cross(Vec3 a,Vec3 b) { return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x}; }
-Vec3 normalize(Vec3 a) { auto n = std::sqrt(dot(a,a)); return n > 0 ? a/n : Vec3{}; }
+Vec3 normalize(Vec3 a) {
+    auto scale=std::max({std::abs(a.x),std::abs(a.y),std::abs(a.z)});
+    if(scale==0 || !std::isfinite(scale)) return {};
+    a=a/scale; return a/std::sqrt(dot(a,a));
+}
 Matrix4 operator*(const Matrix4& a,const Matrix4& b) {
     Matrix4 c; c.m.fill(0);
     for (int r=0;r<4;++r) for (int j=0;j<4;++j) for (int k=0;k<4;++k) c.m[r*4+j] += a.m[r*4+k]*b.m[k*4+j];
