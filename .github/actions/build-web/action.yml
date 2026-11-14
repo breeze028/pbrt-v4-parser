@@ -1,0 +1,62 @@
+name: Build and verify PBRT Scene Lab
+description: Pinned SDK, original scene assets, native/WASM parity and production HTTP checks
+inputs:
+  base:
+    description: Static site mount path, including trailing slash
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '24'
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+    - name: Fetch locked original scene assets and licenses
+      shell: bash
+      run: python tools/web_scene_assets.py fetch
+    - name: Native SDK, both complete scenes and consumer contracts
+      shell: bash
+      run: |
+        cmake -S . -B build-web-native -DCMAKE_BUILD_TYPE=Release -DPBRT4_BUILD_WEB=ON -DPBRT4_TEST_LARGE_SCENES=ON
+        cmake --build build-web-native --parallel 4
+        ctest --test-dir build-web-native --output-on-failure
+    - name: Pinned single-thread Emscripten
+      shell: bash
+      run: |
+        git init .reference/emsdk
+        git -C .reference/emsdk remote add origin https://github.com/emscripten-core/emsdk.git
+        git -C .reference/emsdk fetch --depth 1 origin 708dcbcc9ee23bc7d2dad44fc90db377e38b771c
+        git -C .reference/emsdk checkout --detach FETCH_HEAD
+        .reference/emsdk/emsdk install 7.0.0
+        .reference/emsdk/emsdk activate 7.0.0
+    - shell: bash
+      run: npm ci --prefix web
+    - shell: bash
+      run: npm run build:wasm --prefix web
+    - shell: bash
+      run: npm run prepare:assets --prefix web -- cornell-box spaceship bathroom
+    - name: Three-scene native/WASM parity and exception/ownership checks
+      shell: bash
+      run: npm test --prefix web
+      env:
+        PBRT4_WEB_LARGE_SCENES: '1'
+    - name: Typecheck and production build
+      shell: bash
+      run: npm run build --prefix web
+      env:
+        PAGES_BASE_PATH: ${{ inputs.base }}
+    - name: Verify every served bundle, worker and WASM module
+      shell: bash
+      env:
+        PAGES_BASE_PATH: ${{ inputs.base }}
+      run: |
+        npm run preview --prefix web -- --port 5181 --strictPort > /tmp/pbrt-preview.log 2>&1 &
+        preview_pid=$!
+        trap 'kill "$preview_pid"' EXIT
+        url="http://127.0.0.1:5181${PAGES_BASE_PATH}"
+        for attempt in {1..30}; do
+          if curl --fail --silent "$url" > /dev/null; then break; fi
+          sleep 1
+        done
+        node web/scripts/check-http.mjs "$url" cornell-box spaceship bathroom

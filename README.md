@@ -95,3 +95,7 @@ Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 由独立 WebGPU 消�
 ![WebGPU Cornell 实际预览](docs/assets/webgpu-cornell.jpg)
 
 ![WebGPU Spaceship 实际预览](docs/assets/webgpu-spaceship.jpg)
+
+![WebGPU Bathroom 实际预览](docs/assets/webgpu-bathroom.jpg)
+
+[在线 WebGPU Scene Lab](https://breeze028.github.io/pbrt-v4-parser/) · [固定示例资源](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1)。首次切换 Bathroom 会下载约 64.5 MB 原始资源包并生成 mip，需要支持 WebGPU 的浏览器。

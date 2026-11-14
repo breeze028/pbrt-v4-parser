@@ -35,10 +35,12 @@
 
 - 6 条射线：GPU BVH 与独立 CPU 世界空间 brute-force 的命中 ID、t、重心坐标、几何及原始插值法线，容差 `1e-3`。CPU 检查在单独 Worker，不阻塞 Inspector。
 - 28,681 个 BSDF 查询：解析 Lambert/Fresnel、delta/TIR、rough glass、各向异性、f*cos/pdf、PDF、Fresnel 事件频率、数值积分和 4×4096 个能量抽样；另有大/小/零 PDF 的 MIS 数值检查。涂层测试明确允许 LT 近似的能量增益，不称为严格能量守恒。
-- Bathroom 220 个图像取样：CPU 从原 mip 字节独立做 sRGB 解码、repeat、bilinear/trilinear，比较实际 GPU texture。另有 3 个解析 bump 法线输入。
+- Bathroom 220 个图像取样：CPU 从原 mip 字节独立做 sRGB 解码、repeat、bilinear/trilinear，比较实际 GPU texture。另有 3 个解析 bump 法线输入；最大颜色取样误差 `0.004113`，阈值 `0.006`。
 - 自检同时读取实际累积的 stack / material / nonfinite / transparency 计数，不用隔离测试 buffer 冒充渲染诊断。
 
 早期长时间累积捕获非有限贡献。原 MIS `a²/(a²+b²)` 对极大 PDF 可溢出，现先除以最大 PDF 再计算比值，另处理退化法线；极端数值加入 GPU 检查。修复后 Spaceship 在生产子路径以 128×72、10,000 spp 完成累积，四项诊断均为 0，Console 无警告/错误。384×216、256 spp 的三个独立 seed 均导出有限、非负的线性 HDR。实际画面见 [Spaceship](assets/webgpu-spaceship.jpg)。
+
+Bathroom 在 256×256 / 1024 spp、depth=17 完成原始视角累积，保留全部纹理、alpha 和 bump，见 [实际画面](assets/webgpu-bathroom.jpg)。256 spp HDR 导出全部有限、非负；与 CUDA 64 spp 对照的线性均值为 Web `(2.19290, 2.16030, 2.14518)`、CUDA `(2.21773, 2.19129, 2.17898)`，RMSE `1.18897`、MAE `0.47971`，受噪声和下述差异影响，不作等价性阈值。
 
 ## LightTransport CUDA 对照
 

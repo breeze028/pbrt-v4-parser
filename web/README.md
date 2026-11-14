@@ -81,3 +81,5 @@ GPU layout v2：vertex 48 B、primitive 16 B、node 32 B、material 64 B、place
 Worker 以 generation 丢弃旧结果，显式 close scene handle、清理 MEMFS 输入；重新获取增长后的 HEAPU8，复制大数组后才释放来源。切场景销毁 GPU buffer/texture。WASM 会保留已扩展的 heap 容量供复用，不能把它当成未释放的完整旧场景。
 
 来源与许可见 [THIRD_PARTY](THIRD_PARTY.md)，阶段证据见 [实施记录](../docs/webgpu-scenes-validation.md)。
+
+线上入口：[PBRT Scene Lab](https://breeze028.github.io/pbrt-v4-parser/)。原始资源通过 [scenes-v1 Release](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1) 提供；源码中不包含大型模型、生成 WASM 或 `.lt` 文件。

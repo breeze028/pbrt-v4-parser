@@ -40,7 +40,7 @@ def request(path, method='GET', body=None, upload=None):
         headers['Content-Type'] = 'application/json'
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=60) as response:
+        with urllib.request.urlopen(req, timeout=600 if upload else 60) as response:
             content = response.read()
             return json.loads(content) if content else {'status':response.status}
     except urllib.error.HTTPError as error:

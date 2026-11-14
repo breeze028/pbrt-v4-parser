@@ -83,7 +83,7 @@ export class Renderer {
     this.computeGroup=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],this.accumulation,this.diagnostics].map((buffer,binding)=>({binding,resource:{buffer}}))});
     this.reset();
   }
-  reset(){this.sample=0;this.stats(0);if(this.owned.includes(this.accumulation)){const encoder=this.device.createCommandEncoder();encoder.clearBuffer(this.accumulation);this.device.queue.submit([encoder.finish()]);}}
+  reset(){this.paused=false;this.sample=0;this.stats(0);if(this.owned.includes(this.accumulation)){const encoder=this.device.createCommandEncoder();encoder.clearBuffer(this.accumulation);this.device.queue.submit([encoder.finish()]);}}
   async readHdr(){
     if(!this.metadata?.renderable || this.failed || !this.sample)throw Error('先完成至少一个有效样本');
     const serial=this.serial,width=this.width,height=this.height;

@@ -78,4 +78,4 @@ build-msvc/Debug/tiny_pathtracer.exe scenes/bathroom/scene-v4.pbrt out/bathroom.
 build-msvc/Debug/tiny_pathtracer.exe scenes/spaceship/scene-v4.pbrt out/spaceship.ppm 1
 ```
 
-最后两条当前应失败并给出明确提示，不作为成功渲染测试。下一步若要让这两份原始场景成为渲染展示样例，需要扩展 Tiny 或新增更完整的独立消费者，同时保持 Parser / Scene IR 的原始信息。
+最后两条当前应失败并给出明确提示，不作为成功渲染测试。两个原始场景现由独立 WebGPU 消费者渲染，见 [实施与验证](webgpu-scenes-validation.md)；Tiny 继续限定 Cornell。

@@ -57,3 +57,5 @@ ctest --preset msvc -L example_scene
 - Spaceship 无图片纹理，使用常量 infinite 与 4 个面积光声明；这些光源类型已有基础支持。其 `maxdepth=65` 现可接受（当前上限 1024），材质仍未支持。
 
 没有修改两份源描述、替换材质或去掉纹理来制造“通过”结果。详细证据与修正记录见 [场景检查报告](../docs/example-scenes-validation.md)。
+
+独立 WebGPU 消费者已支持这两个原始场景的渲染，见 [Web 入口](../web/README.md) 与 [实施证据](../docs/webgpu-scenes-validation.md)。也可执行 `python tools/web_scene_assets.py fetch` 下载固定 Release 资源，无需本地 LightTransport。
