@@ -1,6 +1,6 @@
 # Spaceship / Bathroom 实施与验证
 
-本记录接续 [首批 Cornell / WASM 基线](webgpu-implementation.md)。日期：2026-11-15，Asia/Shanghai。发布状态与线上证据将在实际部署完成后补齐；本机证据不代替线上或用户人工验收。
+本记录接续 [首批 Cornell / WASM 基线](webgpu-implementation.md)。日期：2026-11-15，Asia/Shanghai。两个场景已发布到 GitHub / Pages，并完成实际线上 GPU 验证。本机、CI、线上与用户人工验收的证据分别记录。
 
 ## 当前实现
 
@@ -60,3 +60,15 @@ Bathroom 在 256×256 / 1024 spp、depth=17 完成原始视角累积，保留全
 Pages 使用 [指定 skill](../.agents/skills/webgpu-github-pages/SKILL.md)，完整 MIT 归属保留。生成物只上传 `web/dist`，大型原始资产以固定 Release + SHA256 分发；不提交 WASM、模型、node_modules 或本地参考工程。
 
 本机画面、自检、工程/HTTP 与线上分别记录，不以 CI 或 HTTP 绿灯代替 GPU 画面。以上是 Agent 的观察与自动验证，不是用户人工验收，没有跨设备性能或完整 PBRT 工厂覆盖承诺。
+
+## 实际发布结果
+
+- 源码：[breeze028/pbrt-v4-parser](https://github.com/breeze028/pbrt-v4-parser)。原始资产：[scenes-v1](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1)。两个归档都从公开下载地址重新下载，在空目录校验完整 SHA256、90 / 867 个文件及许可证通过。
+- 验证代码提交：`852fb451325a33a3ebd66e8bf90b0fdf6fde8b56`。该提交的 [原生 CI](https://github.com/breeze028/pbrt-v4-parser/actions/runs/43638410866)、[完整三场景 Web CI](https://github.com/breeze028/pbrt-v4-parser/actions/runs/43638410791)、[Pages 部署](https://github.com/breeze028/pbrt-v4-parser/actions/runs/43638410831) 均 success；不是只跑 Cornell 的首轮 CI。
+- 公开网址：[PBRT Scene Lab](https://breeze028.github.io/pbrt-v4-parser/)。从真实 HTTPS 子路径验证三个资源包的每文件 hash、两条 Worker、JS/CSS/WGSL、WASM compile/MIME 与许可证通过。
+- 在线浏览器实际切换 Cornell → Spaceship → Bathroom，adapter=`nvidia ampere`。三者均完成 ray 6/6、BSDF 28,681；Bathroom 额外完成 texture 220 / bump 3，最大误差 `0.004113`。三个实际渲染诊断均 `[0,0,0,0]`，该线上标签页 Console 无 warning/error。
+- 线上截图：[Spaceship / 384×216 / 2409 spp](assets/webgpu-online-spaceship.jpg)、[Bathroom / 384×384 / 900 spp](assets/webgpu-online-bathroom.jpg)。两者为原始相机与默认场景深度，未删改材质。机器可读回读见 [online-checks.json](assets/webgpu-online-checks.json)，取样数为读取自检时的数值，与稍后截图数值分别记录。
+
+浏览器验证接口一度延迟并超时，恢复后对实际线上页面重新读取自检、截图和 Console；没有用本机画面替代线上证据。此前本机纹理图为浮点 mip 版本，最终线上截图与回读已使用整数面积权重 / Q32 量化。文档与证据提交后会继续等待同分支部署完成；后续文档提交不改变 renderer 或资产。
+
+这些结果来自当前 Windows / NVIDIA 机器及 GitHub Linux runner。其他浏览器、GPU、移动设备和无 WebGPU 环境未做实际设备验收；不据此承诺跨设备性能或官方 PBRT 像素等价。
