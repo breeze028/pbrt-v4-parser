@@ -1,0 +1,3 @@
+@PACKAGE_INIT@
+include("${CMAKE_CURRENT_LIST_DIR}/pbrt4Targets.cmake")
+check_required_components(pbrt4)

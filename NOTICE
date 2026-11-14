@@ -1,0 +1,8 @@
+pbrt-v4-parser
+Copyright 2026 pbrt-v4-parser contributors
+
+This project is licensed under Apache-2.0. Its C++ implementation is newly
+written. The upstream projects listed in docs/upstream.md were studied for
+format semantics and API design; their renderer implementation files are not
+distributed or linked. Upstream scene fixtures, when downloaded separately,
+retain their own licenses. This NOTICE does not relicense those assets.
