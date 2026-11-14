@@ -1,6 +1,6 @@
 # WebGPU Renderer 实施计划
 
-状态：2026-11-15，源码调研后的设计计划；本轮没有实现 WASM/WebGPU 或执行发布。用户指定 Tiny CPU Renderer 保持 Cornell Box 范围，WebGPU 消费者负责推进 Spaceship / Bathroom。
+状态：2026-11-15，设计后的首批实现已打通 WASM 数据链路和 Cornell WebGPU；逐项证据与未完成条件见 [实施记录](webgpu-implementation.md)。本文保留完整目标与验收条件，不能把首批实现视为 W0–W5 全部关闭。Tiny CPU Renderer 保持 Cornell Box 范围。
 
 ## 1. 技术路线与验收口径
 
@@ -96,7 +96,7 @@ docs/webgpu-*.md
 - C++ Parser、PLY 仍使用同一 SDK；TS 不解析 PBRT。只在 `web/cpp` 链接可选图像解码与 BVH packer，不增加核心库默认依赖。
 - 单线程 Emscripten 模块在普通 Worker 中运行，首版不依赖 pthread、SharedArrayBuffer 或跨源隔离。pthreads 需要 COOP/COEP；GitHub Pages skill 也明确提示此托管限制。[Emscripten 文档](https://emscripten.org/docs/porting/pthreads.html)
 - 显式开启 C++ 异常捕获并测试 `Abort`/文件错误，不能让 WASM 的构建缺省选项破坏现有诊断机制。
-- 网络读取先异步完成，再以 `LoadOptions.read_file` 与 `GeometryOptions.resources.read_file` 提供同步文件表；根目录固定为 `/scene/`。沿用根文件路径、Include/Import 语义。
+- 网络读取先异步完成，再提供同步虚拟文件表。当前实现将原始资源挂入单线程 WASM MEMFS 的 `/scene-<generation>/`，SDK 与 Geometry 均沿用同一文件系统；保留根文件路径、Include/Import 语义，完成后清理输入。
 - 原始参数/层次使用小型元数据；大数组用 typed array + offset/count，避免把每个顶点变成 JSON/Embind 对象。WASM 内存增长后重新获取 view；GPU 上传和转移完成前不释放其来源；定义显式 scene handle/dispose 协议。
 - 原生和 WASM 对同一场景比较实体数量、引用、Transform、诊断及几何数据；图片解码比较原始像素和方向。
 
@@ -115,7 +115,7 @@ docs/webgpu-*.md
 - 只采用可移植 WebGPU Compute + WGSL，不要求硬件 ray tracing、bindless、f16 或 subgroups。
 - f32/u32 GPU 数据协议版本化，统一矩阵约定、无效 ID、字节序和 padding；native/WASM/TS/WGSL 共享布局测试。`vec3f` 对齐不能当 C++ 的紧凑 12 B struct memcpy。
 - 静态 CPU/WASM BVH2，保留 mesh-local BLAS 和 placement/TLAS；ObjectInstance 不复制几何。世界 Shape 也可视作 placement。命中记录稳定链接回原 Shape/Material/Instance ID。
-- 首版建议 vertex 48 B、primitive 16 B、BVH node 32 B；不是已确定 ABI，W1 布局测试后冻结。统一 scene record arena 放材质、light、instance 与 texture metadata，避免每种数据占一个 storage binding。
+- 首批 GPU layout v1 已采用 vertex 48 B、primitive 16 B、BVH node 32 B，并有 C++ 尺寸/offset 与 native/WASM 数据比较。统一 scene record arena 放材质、emitter、instance；纹理 metadata 留待 W4，避免每种数据占一个 storage binding。
 - 初始 compute 计划约 6 个 storage bindings：nodes、vertices、primitives、scene records、accumulation、diagnostics。实际大小/数量先检查 adapter/device limits 并只请求所需限额。[WebGPU limits](https://www.w3.org/TR/webgpu/#limits)
 
 按上面布局、二叉树最多 `2*T-1` nodes 粗估：Bathroom 约 **61.8 MiB** 几何，Spaceship 约 **51.8 MiB**；不含纹理、累积、CPU/WASM 副本、临时构建或驱动开销。这是预算估算，不是实测 GPU 占用。不会预先宣称所有手机可运行。
@@ -152,7 +152,7 @@ W3 前已有可交互 Cornell 页面，W4 后才允许把两个复杂场景标�
 
 ## 7. 发布流程：采用指定 skill
 
-权威本地入口：`F:\code\webgpu-pages-starter\.agents\skills\webgpu-github-pages\SKILL.md`，读取版本同上。实际搭建时将完整 skill 目录及 MIT 归属带入本仓库 `.agents/skills/`；不复制其立方体 renderer。
+权威本地入口：`F:\code\webgpu-pages-starter\.agents\skills\webgpu-github-pages\SKILL.md`，读取版本同上。完整 skill 目录及 MIT 归属现已带入本仓库 [.agents/skills](../.agents/skills/webgpu-github-pages/SKILL.md)；不复制其立方体 renderer。
 
 拟定构建顺序：
 
@@ -176,7 +176,7 @@ native core checks
 - base 来自 `configure-pages.base_path`；本地生产构建额外模拟改名路径。`import.meta.env.BASE_URL`、Worker URL、WASM glue 的 locateFile 和 manifest 内部引用必须使用同一挂载根，不硬编码用户或仓库名。
 - WGSL 作为文本进入 bundle；WASM/worker/场景包逐项检查真实内容与 MIME，不能把返回 HTML 的 HTTP 200 当成功；WASM 应可实际实例化。
 - 当前约 77 MiB 原场景依赖有望放入静态 artifact，仍须检查完整产物与传输预算。Pages 有站点容量/带宽等限制，按需下载场景，不预加载两个大包。[Pages 限制](https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits)
-- 生产发布须对应实际远程与用户发布要求。当前仓库只有本地 main、没有 remote；此轮是计划，不新建远程、不启用 Pages、不推送或部署。skill 也不替代发布授权。
+- 生产发布须对应实际远程与用户发布要求。当前仓库只有本地 main、没有 remote；已有 `web-ci.yml`，尚未创建实际部署工作流、新建远程、启用 Pages、推送或部署。skill 也不替代发布授权。
 
 ## 8. 第一项实际开发任务
 

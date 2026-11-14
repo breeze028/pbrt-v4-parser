@@ -14,7 +14,7 @@
 
 2026-11-15 本地 Bathroom/Spaceship 回归纠正了此前的法线拼写判断：`paramdict.cpp:116` 使用官方类型 `normal`；之前只接受 `normal3` 的实现有误，现已修复，`normal3` 仅保留为显式 warning 的扩展。源场景未改写。
 
-同日 WebGPU 规划新增来源：[webgpu-pages-starter](https://github.com/breeze028/webgpu-pages-starter) 固定 `468bee0d5f3527d7523f826cf4c64872f70d3385`，MIT；读取其 `.agents/skills/webgpu-github-pages/`、实际 workflow 和 Vite/base/device 实现。本轮未复制代码、skill 或部署文件；计划后续复用时保留 MIT 归属。用户本轮明确要求以 LightTransport CUDA megakernel 为 WebGPU 消费者的移植基础，逐函数来源及适配边界见 [计划](webgpu-renderer-plan.md)，核心 SDK 仍不链接 LightTransport。
+同日 WebGPU 新增来源：[webgpu-pages-starter](https://github.com/breeze028/webgpu-pages-starter) 固定 `468bee0d5f3527d7523f826cf4c64872f70d3385`，MIT；完整 `.agents/skills/webgpu-github-pages/` 已复制并附原 MIT LICENSE，构建/base/验证流程据此适配。LightTransport CUDA 的 diffuse megakernel 已部分移植至独立 WGSL 消费者，逐函数来源、修改与许可边界见 [web/THIRD_PARTY.md](../web/THIRD_PARTY.md)。核心 SDK 仍不链接 LightTransport。
 
 ## 官方内部依赖与抽取边界
 
@@ -28,7 +28,7 @@ LightTransport Loader -> lt::Scene / Material / Texture / Mesh / log / future
                       -> 光谱 RGB 近似 / UV 生成 / 几何烘焙 / 渲染器材质转换
 ```
 
-本项目没有复制这些实现，采用标准库与自有 IR。后续如直接移植代码，必须单独保留原版权头、记录上游路径/commit/修改内容，并复核许可证；不能将本记录视为任何未知资产的授权。
+核心 SDK 没有复制这些内部依赖实现，采用标准库与自有 IR。可选 Web shader 的算法移植另有上述归属记录；不能将核心 SDK 的 Apache-2.0 声明视为未知上游代码或资产的授权。
 
 ## 已核对的关键语义
 

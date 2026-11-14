@@ -1,8 +1,19 @@
 pbrt-v4-parser
 Copyright 2026 pbrt-v4-parser contributors
 
-This project is licensed under Apache-2.0. Its C++ implementation is newly
-written. The upstream projects listed in docs/upstream.md were studied for
-format semantics and API design; their renderer implementation files are not
-distributed or linked. Upstream scene fixtures, when downloaded separately,
-retain their own licenses. This NOTICE does not relicense those assets.
+The independent C++ SDK implementation is licensed under Apache-2.0.
+The upstream projects listed in docs/upstream.md were studied for format
+semantics and API design. The optional web consumer includes a WGSL port of
+selected LightTransport CUDA algorithms, explicitly requested by the owner
+of the local source. Its source mapping and licensing boundary are recorded
+in web/THIRD_PARTY.md; the independent-SDK statement does not relicense the
+upstream renderer or its third-party components.
+
+The GitHub Pages skill and deployment configuration reference
+webgpu-pages-starter, Copyright (c) 2026 breeze028, MIT License.
+The full MIT notice is preserved in web/licenses/webgpu-pages-starter-MIT.txt
+and .agents/skills/webgpu-github-pages/LICENSE.
+
+Scene fixtures retain their own licenses. This NOTICE does not relicense
+those assets. Emscripten, Node and npm dependencies are external build tools;
+their source trees are not distributed with this repository.

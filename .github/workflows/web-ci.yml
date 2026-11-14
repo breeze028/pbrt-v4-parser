@@ -1,0 +1,49 @@
+name: web-consumer-checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Native SDK and consumer contracts
+        run: |
+          cmake -S . -B build-web-native -DCMAKE_BUILD_TYPE=Release -DPBRT4_BUILD_WEB=ON
+          cmake --build build-web-native --parallel 4
+          ctest --test-dir build-web-native --output-on-failure
+      - name: Pinned single-thread Emscripten
+        run: |
+          git init .reference/emsdk
+          git -C .reference/emsdk remote add origin https://github.com/emscripten-core/emsdk.git
+          git -C .reference/emsdk fetch --depth 1 origin 708dcbcc9ee23bc7d2dad44fc90db377e38b771c
+          git -C .reference/emsdk checkout --detach FETCH_HEAD
+          .reference/emsdk/emsdk install 7.0.0
+          .reference/emsdk/emsdk activate 7.0.0
+      - run: npm ci --prefix web
+      - run: npm run build:wasm --prefix web
+      - run: npm run prepare:assets --prefix web
+      - run: npm test --prefix web
+      - name: Build renamed-subpath production output
+        run: npm run build --prefix web
+        env:
+          PAGES_BASE_PATH: /renamed-project/
+      - name: Verify actual HTTP assets and WASM
+        env:
+          PAGES_BASE_PATH: /renamed-project/
+        run: |
+          npm run preview --prefix web -- --port 5181 --strictPort > /tmp/pbrt-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid"' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:5181/renamed-project/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node web/scripts/check-http.mjs http://127.0.0.1:5181/renamed-project/
+      # Real GPU/browser and Pages deployment are separate evidence tiers.
+      # The optional large scenes require fixed asset hosting before CI enables them.

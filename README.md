@@ -90,4 +90,6 @@ Windows 指定 `--info build-msvc/Debug/pbrt4_info.exe`。该测试验证解析�
 
 Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 的渲染支持在后续 WebGPU 阶段考虑。
 
-后续路线已整理为 [WebGPU Renderer 计划](docs/webgpu-renderer-plan.md)：以 LightTransport CUDA megakernel 为移植来源，C++ SDK/WASM 保留场景语义，WGSL 消费者依次推进 Cornell、Spaceship、Bathroom；Pages 流程参考指定 starter skill。该部分当前处于规划阶段。
+独立 [WebGPU Scene Lab](web/README.md) 已打通同一 C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel。Cornell Box 已在真实浏览器出图，支持原始参数检查、相机、曝光与渐进累积；Spaceship / Bathroom 已通过 native/WASM 数据一致性与浏览器加载检查，复杂材质和纹理仍待实现。安装与启动见 Web README，实际验证与剩余工作见 [实施记录](docs/webgpu-implementation.md)，完整路线见 [WebGPU 计划](docs/webgpu-renderer-plan.md)。尚未发布 Pages。
+
+![WebGPU Cornell 实际预览](docs/assets/webgpu-cornell.jpg)
