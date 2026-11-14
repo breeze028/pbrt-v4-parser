@@ -1,4 +1,5 @@
-struct Frame { camera:array<vec4f,4>, size:vec4u, params:vec4f, sampling:vec4f }
+// SPDX-License-Identifier: Apache-2.0
+struct Frame { camera:array<vec4f,4>, size:vec4u, params:vec4f, sampling:vec4f, features:vec4u }
 @group(0) @binding(0) var<uniform> frame:Frame;
 @group(0) @binding(1) var<storage,read> accumulation:array<vec4f>;
 @vertex fn vertex(@builtin(vertex_index) index:u32)->@builtin(position) vec4f {

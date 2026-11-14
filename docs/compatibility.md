@@ -26,7 +26,7 @@
 | curve / loopsubdiv / disk 等 | 完整声明与状态保留 | 尚无 adapter | 拒绝 |
 | 图片 / Ptex / SPD / NanoVDB | 路径与参数保留，未解码 | 不解码 | 拒绝需要它们的渲染输入 |
 | gzip | 明确报错 | 未实现 | 未实现 |
-| WASM / WebGPU | 可选单线程 WASM，三个本地场景已比较 | BLAS/TLAS 四数组 native/WASM 一致 | 独立 Web consumer 可渲染 Cornell；复杂场景仅加载检查 |
+| WASM / WebGPU | 可选单线程 WASM，三个场景已比较 | BLAS/TLAS、records、image/mip 五数组 native/WASM 一致 | 独立 Web consumer 已渲染 Cornell / Spaceship / Bathroom |
 
 ## 尚需完善
 
@@ -45,4 +45,4 @@
 
 当前范围约定：Tiny 以 `scenes/cornell-box/scene-v4.pbrt` 为主要渲染验收场景；Bathroom / Spaceship 留待 WebGPU 消费者考虑。Cornell 原始 triangle filter 和 maxdepth=65 已支持；不因此新增复杂 BSDF、图片纹理、alpha 或 displacement 到 Tiny。
 
-WebGPU 的首批实施证据见 [webgpu-implementation.md](webgpu-implementation.md)。Web 消费者与 Tiny 独立：它已在浏览器运行 Cornell 的 diffuse / 面积光 NEE/MIS；不支持的复杂材质、图片/光谱、alpha、bump、介质等会拦截渲染。GPU 时间、CUDA 图像对齐、复杂场景出图及线上部署仍未验证。
+WebGPU 与 Tiny 独立。当前两个大场景的支持与证据见 [webgpu-scenes-validation.md](webgpu-scenes-validation.md)：GGX conductor、LT coat 近似、rough/delta dielectric、常量环境、TGA/角色 mip、独立 alpha 与 bump 已实现。银为 RGB 光谱近似，其他光谱/图片格式/材质工厂/介质/动画仍会拦截。支持这两个场景不表示完整 PBRT-v4 工厂或光谱渲染等价。

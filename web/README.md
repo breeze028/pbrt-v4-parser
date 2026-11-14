@@ -1,80 +1,83 @@
 # PBRT Scene Lab · WebGPU
 
-可选 SDK 消费者：C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel → HDR 累积与独立显示 pass。Tiny CPU Renderer 继续保持原范围。
+独立 C++ SDK 的浏览器消费者：**原始 PBRT/PLY/TGA → 同一 C++ SDK / 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel → HDR 累积与显示**。没有另写 JS Parser，也不把预解析 JSON 当作场景入口。
 
-目前 Cornell Box 已实际渲染，提供相机旋转、曝光、暂停、重新累积、128–512 预览最长边、采样钳制开关及原始参数 Inspector。Spaceship / Bathroom 可以通过同一 WASM 加载、构建几何、检查参数与缺口，尚不能渲染。
+Cornell、Spaceship、Bathroom 均已在本机真实 WebGPU 中渲染。Spaceship 包括 conductor、coat、rough dielectric 和常量环境；Bathroom 包括 TGA、trilinear mip、独立 rug mask、银的 RGB 近似及材质 bump。原始参数、引用、资源路径、变换、对象/实例、材质与纹理可在 Inspector 中检查。
 
-## 本机构建
+## 运行
 
-需要 CMake ≥3.21、C++20、Ninja、Node 24、Python 3、Emscripten **7.0.0**。SDK 默认构建仍不需要 Node / Emscripten。浏览器需要 HTTPS 或 localhost、WebGPU；此版不使用 pthread / SharedArrayBuffer。
+需要 CMake ≥3.21、C++20、Ninja、Node **24**、Python 3、Emscripten **7.0.0**。浏览器需要 HTTPS / localhost 与 WebGPU。核心 SDK 默认构建仍不需要 Node、Emscripten 或图片库。
 
-以下命令从仓库根执行，PowerShell：
+从仓库根执行，Windows / PowerShell：
 
 ```powershell
-cmake -S . -B build-web-native -G 'Visual Studio 17 2022' -A x64 -DPBRT4_BUILD_WEB=ON
+python tools/web_scene_assets.py fetch
+cmake -S . -B build-web-native -G 'Visual Studio 17 2022' -A x64 -DPBRT4_BUILD_WEB=ON -DPBRT4_TEST_LARGE_SCENES=ON
 cmake --build build-web-native --config Release --parallel 4
 ctest --test-dir build-web-native -C Release --output-on-failure
 ```
 
-安装一次官方 Emscripten SDK（也可使用已有 SDK 并设置 `EMSDK`）：
+若已有原始模型/纹理，资源脚本验证后跳过匹配文件，不覆盖改动过的资产。也可按 [场景说明](../scenes/README.md) 从本地 LightTransport 准备。固定下载包与 SHA256 见 [assets.lock.json](assets.lock.json)。每个包包含 CC0 LICENSE；不包含 `.lt` / `.ivol`。
+
+安装一次官方 SDK，或设置 `EMSDK` 指向已有的 7.0.0 SDK：
 
 ```powershell
 git clone https://github.com/emscripten-core/emsdk.git .reference/emsdk
 git -C .reference/emsdk checkout 708dcbcc9ee23bc7d2dad44fc90db377e38b771c
 python .reference/emsdk/emsdk.py install 7.0.0
 python .reference/emsdk/emsdk.py activate 7.0.0
-```
-
-```powershell
 npm ci --prefix web
 npm run build:wasm --prefix web
-npm run prepare:assets --prefix web
-npm test --prefix web
-npm run dev --prefix web -- --port 5180
-```
-
-打开终端打印的 localhost URL。`build:wasm` 优先读取 `EMSDK`，否则使用 `.reference/emsdk`；无需永久修改系统 PATH。`prepare:assets` 复制编译后的 WASM，并生成 Cornell 的 manifest / 原始文件包。只运行 `npm run build` 不会重新编译 C++ 或打包场景，修改 C++ 后必须依次重跑这两步。
-
-Linux 的原生配置使用 `cmake -S . -B build-web-native -DCMAKE_BUILD_TYPE=Release -DPBRT4_BUILD_WEB=ON`，省略 Visual Studio 参数和 `--config Release`。自动比较程序可用 `PBRT4_WEB_PACK` 指定 native packer 路径。
-
-## 可选大场景加载检查
-
-先按 [场景准备说明](../scenes/README.md) 放置原始模型/纹理，然后：
-
-```powershell
 npm run prepare:assets --prefix web -- cornell-box spaceship bathroom
 $env:PBRT4_WEB_LARGE_SCENES='1'
 npm test --prefix web
 Remove-Item Env:PBRT4_WEB_LARGE_SCENES
+npm run dev --prefix web -- --port 5180
 ```
 
-默认测试 Cornell、异常恢复、Include/Import 与共享实例；设置此变量后额外执行两个大场景的 native/WASM 元数据及四个 GPU 数组逐字节比较。请求未打包的场景会明确报“场景包未准备”。资源包保留 PBRT/PLY/TGA 原字节和 LICENSE，逐文件 SHA256；不包含 `.lt` / `.ivol`。`web/public/` 内的 WASM 与场景包均为生成物，不提交 Git。
+打开终端打印的 URL。Linux 原生配置改用 `-DCMAKE_BUILD_TYPE=Release` 并省略 Visual Studio / `--config` 参数。`PBRT4_WEB_PACK` 可指定 native packer 路径。只准备 Cornell 时，省略 `prepare:assets` 的三个名称及大场景测试变量；默认 WASM 测试为 4 项，全部资产齐备后为 6 项。
 
-## 生产子路径验证与发布边界
+修改 C++ 后必须重跑 `build:wasm` 和 `prepare:assets`，再构建前端；单独 `npm run build` 只做类型检查与 Vite 打包。WASM 与原始场景包、许可证目录均由脚本生成，不将大模型、node_modules 或工具链放进 Git。
+
+## 操作
+
+- 拖动画布旋转，滚轮前后移动；聚焦画布后 WASD / QE 移动、方向键转头，Shift 加速。重置相机恢复原 PBRT 构图。
+- 预览最长边 128 / 256 / 384 / 512，保持 Film 纵横比。曝光只影响显示；相机、分辨率、深度、seed、LOD / alpha / bump 开关会清空累积。
+- 渲染设置可指定目标 spp（0 持续）、深度与随机种子。达到目标自动暂停。PFM 导出包含按每像素计数归一化后的线性 RGB，不含曝光或 tonemap。
+- `GPU 自检` 比较 GPU BVH 与 CPU brute-force 命中/距离/重心/法线，执行 BSDF 解析值、PDF/能量/Fresnel/TIR、MIS 极端值、纹理编码/wrap/mip、bump 法线检查，并读取实际渲染诊断。CPU 求交在另一个 Worker 中运行。
+- Texture Inspector 展示原始声明与解码后预览、尺寸、mip、颜色/数据角色。Geometry / Material / Light / Object / Instance 参数保持只读，不用简化表单替换原始 PBRT。
+
+## 生产构建与 Pages
 
 ```powershell
 $env:PAGES_BASE_PATH='/renamed-project/'
 npm run build --prefix web
 npm run preview --prefix web -- --port 5181 --strictPort
-# 在另一终端运行：
-node web/scripts/check-http.mjs http://127.0.0.1:5181/renamed-project/
-# 停止 preview 后清理变量：
+# 另一终端：
+node web/scripts/check-http.mjs http://127.0.0.1:5181/renamed-project/ cornell-box spaceship bathroom
+# 停止预览后：
 Remove-Item Env:PAGES_BASE_PATH
 ```
 
-必须访问包含 `/renamed-project/` 的生产 URL。HTTP 检查涵盖 HTML、JS、CSS、module worker、内嵌 WGSL、WASM MIME/magic/实际编译以及 Cornell 包哈希；随后在真实浏览器里观察画面、GPU 自检、Console 与交互。
+HTTP 检查验证 HTML/JS/CSS、两个 Worker、内嵌 WGSL、WASM MIME/magic/实际编译，以及三个原始包的每文件 SHA256 和 LICENSE。随后仍需真实浏览器观察画面和 Console；HTTP 200 与 CI 绿灯不等于 GPU 已渲染。
 
-`.github/workflows/web-ci.yml` 固定工具链并在 Linux 配置上述工程与 HTTP 检查，尚未在远程执行。Pages 发布方法已完整引入 [.agents skill](../.agents/skills/webgpu-github-pages/SKILL.md)，当前没有 remote、发布工作流或线上 URL。大资产的固定下载地址/哈希与实际部署在后续 W5 处理。
+部署采用指定 [webgpu-github-pages skill](../.agents/skills/webgpu-github-pages/SKILL.md)。公共 Release 提供固定原始资产，CI 按 lock 校验后生成 Pages 本站包。`web-ci.yml` 检查改名子路径，`deploy-pages.yml` 从 Pages 元数据取 base 并只上传 `web/dist`；核心 C++ CI 保留。
 
-## 当前语义与限制
+## 明确的近似与边界
 
-- GPU layout v1：vertex 48 B、primitive 16 B、node 32 B、material 64 B、placement 160 B、emitter 16 B；矩阵为 row-major / column vectors。四数组顺序为 vertices / primitives / nodes / records。
-- 每个网格只构建一份 BLAS；TLAS 保存 placement。GPU 循环遍历使用两个 64 槽栈，构建深度受限，溢出/非法材质/非有限贡献有计数并停止错误渲染。
-- `GPU 自检` 在独立 buffer 发射 6 条射线；独立 CPU brute-force 世界空间求交对比命中 ID、t、重心坐标、几何与插值法线，容差 `1e-3`。它不是图像正确性或完整 BSDF 的证明。
-- 只渲染静态透视、box/triangle filter、trianglemesh/PLY、常量 RGB diffuse、RGB diffuse 面积光；其他光源、介质、动画、图片/光谱、alpha、bump、复杂材质会显示诊断并阻止开始渲染。
-- Film 分辨率保持纵横比，预览默认最长边 384；`maxdepth` 保留 Cornell 的 65。Sampler 原参数保留，但执行使用 PCG，Accelerator 使用自有 median BVH。没有 Sobol 或 PBRT 全部 Integrator / Film 语义。
-- RR 概率 `.05–.95`，贡献钳制 `64/8` 默认开启，可关闭；HDR 累积不受曝光影响。显示使用 `1-exp(-exposure*RGB)` 与 gamma 2.2，没有声称 PBRT 色彩管线等价。
-- 未提供 GPU 时间或性能承诺。`WASM 加载` 是下载/校验/解析/构建/复制的 CPU wall time；spp 是每像素样本数。
-- Worker generation 防止迟到结果覆盖新场景；scene handle 显式 close，大数组复制后再释放 WASM，MEMFS 输入在完成后清理。WASM heap 会保留已扩展容量供复用，不声称切换后回到初始进程内存。
+这是 LightTransport 风格的 RGB renderer，**不是完整 PBRT-v4 渲染器**：
 
-来源、许可边界与逐函数映射见 [THIRD_PARTY](THIRD_PARTY.md)，阶段证据与剩余工作见 [实施记录](../docs/webgpu-implementation.md)。
+- coateddiffuse 为 LT 的 Principled + coat 近似，底层 roughness=1、coat roughness 至少 .02；不是 PBRT layered BSDF，白色涂层可能产生小幅能量增益。
+- conductor 使用 RGB eta/k 与 GGX；银的具名光谱采用 LT 的 650/550/450 nm 近似。rough dielectric 的求值、采样、连续 PDF、Fresnel/TIR 和折射 Jacobian 已实现，未忽略 Spaceship 的 .01 roughness。
+- 默认颜色 TGA 按 LT 风格 sRGB、float 数据按 linear，显式 encoding 优先；官方 PBRT 对 TGA 的默认 linear 与此不同。颜色与数据角色分开生成 mip。
+- compute 显式取 LOD，使用 ray cone + UV 密度近似做 trilinear；不是完整 ray differentials / EWA。材质 displacement 扰动 shading normal，包含 UV 与法线微分，不改变网格轮廓。
+- alpha 在主路径和阴影均独立求值。玻璃阴影采用直线穿越及 Fresnel 衰减，是 LT 近似；没有折射阴影/焦散保证。透明穿越最多 128 步、额外透射最多 12 次，超限会诊断并停止错误渲染。
+- PCG、自有 median BVH、独立 tonemap 与 gamma 2.2；不实现 PBRT Sobol / 全部 Integrator / Film 色彩语义。原始参数始终保留。默认贡献钳制 64/8、RR .05–.95，可关闭钳制做线性 HDR 比较。
+- 仅实现目标场景所需的四类材质、常量环境、diffuse 面积光、静态透视、box/triangle filter、三角网格/PLY 和 TGA。其他工厂、图片格式、介质、动画等会拦截并报诊断。
+- 不要求硬件 RT、subgroups、f16、bindless、pthreads 或跨源隔离。每 dispatch 1 spp，不提供未经测量的 GPU 时间/帧率或全移动设备支持承诺。
+
+GPU layout v2：vertex 48 B、primitive 16 B、node 32 B、material 64 B、placement 160 B、emitter 16 B、texture record 32 B、alpha record 16 B；矩阵 row-major / column vectors。五个传输数组为 vertices / primitives / nodes / records / image-mip-bytes。图像使用 12 个固定 slots + WGSL switch；当前 Bathroom 实际占 11 个角色副本。
+
+Worker 以 generation 丢弃旧结果，显式 close scene handle、清理 MEMFS 输入；重新获取增长后的 HEAPU8，复制大数组后才释放来源。切场景销毁 GPU buffer/texture。WASM 会保留已扩展的 heap 容量供复用，不能把它当成未释放的完整旧场景。
+
+来源与许可见 [THIRD_PARTY](THIRD_PARTY.md)，阶段证据见 [实施记录](../docs/webgpu-scenes-validation.md)。

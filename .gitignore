@@ -1,8 +1,10 @@
 .reference/
-build*/
+/build*/
 out/
 *.ppm
 web/node_modules/
 web/dist/
 web/public/wasm/
 web/public/scenes/
+web/public/licenses/
+__pycache__/

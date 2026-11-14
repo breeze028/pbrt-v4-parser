@@ -7,7 +7,13 @@ semantics and API design. The optional web consumer includes a WGSL port of
 selected LightTransport CUDA algorithms, explicitly requested by the owner
 of the local source. Its source mapping and licensing boundary are recorded
 in web/THIRD_PARTY.md; the independent-SDK statement does not relicense the
-upstream renderer or its third-party components.
+upstream renderer or its third-party components. The adapted WGSL files are
+distributed under this project's Apache-2.0 license at the source owner's
+explicit reuse and publication request. See web/THIRD_PARTY.md.
+
+Microfacet and bump formulas reference pbrt-v4. pbrt is Copyright(c) 1998-2020
+Matt Pharr, Wenzel Jakob, and Greg Humphreys; its Apache-2.0 license is retained
+in web/licenses/pbrt-v4-Apache-2.0.txt.
 
 The GitHub Pages skill and deployment configuration reference
 webgpu-pages-starter, Copyright (c) 2026 breeze028, MIT License.

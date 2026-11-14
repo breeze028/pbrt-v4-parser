@@ -1,6 +1,6 @@
 # WebGPU Renderer 实施计划
 
-状态：2026-11-15，设计后的首批实现已打通 WASM 数据链路和 Cornell WebGPU；逐项证据与未完成条件见 [实施记录](webgpu-implementation.md)。本文保留完整目标与验收条件，不能把首批实现视为 W0–W5 全部关闭。Tiny CPU Renderer 保持 Cornell Box 范围。
+状态：2026-11-15，Cornell / Spaceship / Bathroom 的 WebGPU 实现已完成本机验证，当前状态与发布证据见 [两场景实施记录](webgpu-scenes-validation.md)。本文保留设计时的目标和分阶段验收条件；Tiny CPU Renderer 保持 Cornell Box 范围。
 
 ## 1. 技术路线与验收口径
 

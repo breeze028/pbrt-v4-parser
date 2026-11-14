@@ -1,0 +1,23 @@
+PBRT Scene Lab / pbrt-v4-parser
+Copyright 2026 pbrt-v4-parser contributors. Apache License 2.0.
+
+WGSL algorithm port from LightTransport, author breeze028,
+commit 47a461d267ed61c2c30c5054d98290ab107da581.
+Adapted WGSL files are distributed under this project's Apache-2.0 license.
+This does not relicense the complete upstream renderer or its third-party code.
+
+Microfacet and bump equations reference pbrt-v4,
+commit b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f.
+pbrt is Copyright(c) 1998-2020 Matt Pharr, Wenzel Jakob, and Greg Humphreys.
+Apache License 2.0; full upstream license is included.
+
+GitHub Pages skill and configuration reference webgpu-pages-starter,
+Copyright (c) 2026 breeze028, MIT License; full license is included.
+
+WebAssembly runtime/toolchain: Emscripten 7.0.0.
+Emscripten, libc++ and musl license/copyright notices are included here.
+
+Spaceship: '4060.b Spaceship' by thecali. CC0.
+Bathroom: 'Contemporary Bathroom' by Mareck. CC0.
+Converted scene assets were obtained from Benedikt Bitterli's resource collection.
+The original per-scene LICENSE.txt is included in every downloadable scene bundle.

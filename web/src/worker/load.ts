@@ -39,7 +39,7 @@ workerScope.onmessage=async ({data}:{data:{generation:number;base:string;scene:s
     handle=wasm._p4_open(pointer);if(!handle)throw Error('WASM scene allocation failed');
     const metadata=JSON.parse(wasm.UTF8ToString(wasm._p4_metadata(handle))) as Metadata;
     // Reacquire HEAPU8 for every buffer: parsing/building may grow WASM memory.
-    const buffers=Array.from({length:4},(_,k)=>{const p=wasm!._p4_data(handle,k),n=wasm!._p4_bytes(handle,k);return wasm!.HEAPU8.slice(p,p+n).buffer;});
+    const buffers=Array.from({length:5},(_,k)=>{const p=wasm!._p4_data(handle,k),n=wasm!._p4_bytes(handle,k);return wasm!.HEAPU8.slice(p,p+n).buffer;});
     const result:Loaded={type:'loaded',generation:data.generation,metadata,buffers,milliseconds:performance.now()-start};workerScope.postMessage(result,buffers);
   }catch(e){send({type:'error',generation:data.generation,message:String(e)});}
   finally {

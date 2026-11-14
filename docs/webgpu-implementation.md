@@ -1,5 +1,7 @@
 # WebGPU 首批实现与验证
 
+后续 Spaceship / Bathroom 已接入 WebGPU，当前实现与新证据见 [两场景实施记录](webgpu-scenes-validation.md)。本文保留首批 W0–W2 的历史状态与验证范围。
+
 日期：2026-11-15（Asia/Shanghai）。目标是计划第 8 节的首批数据链路与 Cornell 闭环，不是两个复杂场景的渲染验收。
 
 ## 当前阶段

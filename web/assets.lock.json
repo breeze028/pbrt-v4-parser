@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "tag": "scenes-v1",
+  "repository": "breeze028/pbrt-v4-parser",
+  "scenes": [
+    {
+      "name": "spaceship",
+      "archive": "spaceship-original-v1.tar.gz",
+      "url": "https://github.com/breeze028/pbrt-v4-parser/releases/download/scenes-v1/spaceship-original-v1.tar.gz",
+      "sha256": "15ae68cc7d4795350107ecb83d386a85afd7a279b60c65d2bc3e636180391d0f",
+      "bytes": 6968024,
+      "files": 90,
+      "root_sha256": "4195f5f3f265c58b92e80e363f3d545711eedc2fe0181a2d3d4c2713b6ef1853",
+      "license_sha256": "8d539d1200efc24c58abb792b778a28a38724747dedf4e8bfac6b845cd5ca145"
+    },
+    {
+      "name": "bathroom",
+      "archive": "bathroom-original-v1.tar.gz",
+      "url": "https://github.com/breeze028/pbrt-v4-parser/releases/download/scenes-v1/bathroom-original-v1.tar.gz",
+      "sha256": "7220c027c35acc1711bfa67e560eacdc06b715054da757b773c95ac5abae1897",
+      "bytes": 36309416,
+      "files": 867,
+      "root_sha256": "7e3a3a438fa811e757c13b8db8b0ff415e2ebe943b5d1fbc4b7da0598f8e5324",
+      "license_sha256": "b55559acc4a6df930d4e09edcb9df219954ca44a4d5f8e5f79dafb07e79da294"
+    }
+  ]
+}

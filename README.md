@@ -88,8 +88,10 @@ Windows 指定 `--info build-msvc/Debug/pbrt4_info.exe`。该测试验证解析�
 
 本地 [Bathroom / Spaceship 示例](scenes/README.md) 可通过复制脚本准备资产，并用 `pbrt4_info --details --check-resources --geometry scene.pbrt` 检查资源与全部网格。这两份原始场景目前通过加载回归，**Tiny 尚不能正常渲染**，具体缺口见 [检查报告](docs/example-scenes-validation.md)。
 
-Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 的渲染支持在后续 WebGPU 阶段考虑。
+Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 由独立 WebGPU 消费者渲染。
 
-独立 [WebGPU Scene Lab](web/README.md) 已打通同一 C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel。Cornell Box 已在真实浏览器出图，支持原始参数检查、相机、曝光与渐进累积；Spaceship / Bathroom 已通过 native/WASM 数据一致性与浏览器加载检查，复杂材质和纹理仍待实现。安装与启动见 Web README，实际验证与剩余工作见 [实施记录](docs/webgpu-implementation.md)，完整路线见 [WebGPU 计划](docs/webgpu-renderer-plan.md)。尚未发布 Pages。
+独立 [WebGPU Scene Lab](web/README.md) 使用同一 C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel。**Cornell、Spaceship、Bathroom 均已在真实浏览器渲染**，支持 GGX 金属、粗糙/理想玻璃、LT 涂层近似、TGA/mip、独立 alpha、bump、Inspector 与线性 HDR 导出。三场景几何/材质/图片数据已做 native/WASM 一致性比较，已记录的 RGB 与材质近似不等同于完整 PBRT。安装与启动见 Web README，实际证据见 [两场景实施记录](docs/webgpu-scenes-validation.md)。
 
 ![WebGPU Cornell 实际预览](docs/assets/webgpu-cornell.jpg)
+
+![WebGPU Spaceship 实际预览](docs/assets/webgpu-spaceship.jpg)

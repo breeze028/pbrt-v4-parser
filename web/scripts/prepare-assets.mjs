@@ -5,6 +5,9 @@ import { createHash } from 'node:crypto';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const output=resolve(root,'web/public');
 await mkdir(resolve(output,'wasm'),{recursive:true});
+await mkdir(resolve(output,'licenses'),{recursive:true});
+for(const name of await readdir(resolve(root,'web/licenses')))if(name.endsWith('.txt'))await copyFile(resolve(root,'web/licenses',name),resolve(output,'licenses',name));
+await copyFile(resolve(root,'LICENSE'),resolve(output,'licenses/pbrt-v4-parser-Apache-2.0.txt'));
 for(const name of ['pbrt4_wasm.mjs','pbrt4_wasm.wasm']) await copyFile(resolve(root,'build-web-wasm/wasm',name),resolve(output,'wasm',name));
 const selected=process.argv.slice(2); const names=selected.length?selected:['cornell-box'];
 for(const name of names) {
