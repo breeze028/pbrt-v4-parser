@@ -19,5 +19,7 @@ int main(){try{
     auto scalar=make_mips(gray_image,false,true);check(scalar.bytes[0]==0 && scalar.bytes[4]==255 && scalar.bytes[8]==128,"RGB scalar independent of opaque A");
     auto rgba=header(1,1,2,32,40);rgba.insert(rgba.end(),{255,255,255,64});scalar=make_mips(decode_tga(rgba),false,true);check(scalar.bytes[0]==64,"declared alpha scalar");
     auto npot=header(3,1,3,8);npot.insert(npot.end(),{0,0,255});auto mip=make_mips(decode_tga(npot),false,false);check(mip.bytes.back()==255 && mip.bytes[12]==85,"NPOT mip includes final column");
+    auto half=header(249,2,3,8);half.insert(half.end(),249,27);half.insert(half.end(),249,28);mip=make_mips(decode_tga(half),false,true);
+    for(unsigned i=0;i<124;++i)check(mip.bytes[mip.levels[1].offset+i*4]==28,"NPOT rational half-byte rounds up consistently");
     std::cout<<"PASS TGA origins / BGR / RLE / malformed / alpha and RGB scalar / encoding and NPOT mips\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

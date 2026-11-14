@@ -25,7 +25,7 @@
 
 - Windows / MSVC 原生 **38/38**：原 SDK / Geometry / Tiny 回归、两个大型场景、web scene 与 image contract。
 - Emscripten **7.0.0** 实际编译；三场景 native/WASM **7/7** 通过。虚拟根目录规范化；typed parameters、引用、资源路径、scope、诊断均严格比较。派生 double Transform 允许 `32×epsilon×max(1,abs(a),abs(b))` 的跨 libm 舍入差；五个 GPU 数组仍逐字节比较。另有比较器回归，确保不能把该容差用于原始数值或引用 ID。
-- 异常检查包含坏 PBRT / 缺文件 / 作用域错误、坏 TGA 后恢复、Import 隔离、共享 BLAS 与 handle 关闭后不可访问。TGA 测试涵盖 top/bottom/right origin、BGR、RLE、越界/截断、RGB scalar 与 alpha、linear/sRGB mip、NPOT 边缘。
+- 异常检查包含坏 PBRT / 缺文件 / 作用域错误、坏 TGA 后恢复、Import 隔离、共享 BLAS 与 handle 关闭后不可访问。TGA 测试涵盖 top/bottom/right origin、BGR、RLE、越界/截断、RGB scalar 与 alpha、linear/sRGB mip、NPOT 边缘与半字节舍入。Linux 首轮发现 float 数据的 249→124 区间出现 1 字节舍入分歧，现用整数有理面积权重、Q32 线性颜色和固定阈值量化；保留完整 mip 字节比较，不给像素数组放宽容差。
 - 类型检查、生产构建，以及 `/renamed-project/` 的三个包、两个 Worker、WGSL、WASM MIME/compile、每文件 SHA256、LICENSE 检查已实际通过。
 - 可重建原始资产包已在空目录完整校验：Spaceship **90 文件 / 6,968,024 B gzip**，Bathroom **867 文件 / 36,309,416 B gzip**。锁与下载脚本保留根 PBRT / LICENSE hash，拒绝覆盖修改过的资产，排除 `.lt` / `.ivol`。
 

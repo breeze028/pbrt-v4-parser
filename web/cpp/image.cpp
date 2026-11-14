@@ -36,15 +36,28 @@ ImageData decode_tga(std::span<const std::uint8_t> input){
 }
 namespace {
 double linear(double x){return x<=.04045?x/12.92:std::pow((x+.055)/1.055,2.4);}
-double encoded(double x){return x<=.0031308?12.92*x:1.055*std::pow(x,1/2.4)-.055;}
-std::uint8_t byte(double x){return static_cast<std::uint8_t>(std::clamp(std::lround(x*255),0l,255l));}
+constexpr std::uint64_t linear_max=4294967295ull;
+struct Transfer {
+    std::array<std::uint64_t,256> decode;
+    std::array<std::uint64_t,255> boundary;
+    Transfer(){
+        for(unsigned i=0;i<256;++i)decode[i]=std::llround(linear(i/255.)*linear_max);
+        for(unsigned i=0;i<255;++i)boundary[i]=std::llround(linear((i+.5)/255.)*linear_max);
+    }
+};
+const Transfer transfer;
+std::uint8_t color_byte(std::uint64_t sum,std::uint64_t total){
+    unsigned lo=0,hi=255;
+    while(lo<hi){auto mid=(lo+hi)/2;if(sum>=transfer.boundary[mid]*total)lo=mid+1;else hi=mid;}
+    return static_cast<std::uint8_t>(lo);
+}
 }
 ImageMips make_mips(ImageData image,bool srgb,bool scalar){
     if(image.rgba.size()!=std::size_t(image.width)*image.height*4 || !image.width || !image.height)throw std::runtime_error("Invalid mip image storage");
     if(scalar)for(std::size_t i=0;i<image.rgba.size();i+=4){
-        double v=image.alpha?image.rgba[i+3]/255.:0.;
-        if(!image.alpha)for(int c=0;c<3;++c){double x=image.rgba[i+c]/255.;v+=(srgb?linear(x):x)/3;}
-        auto b=byte(v);image.rgba[i]=image.rgba[i+1]=image.rgba[i+2]=b;image.rgba[i+3]=255;
+        std::uint64_t sum=0;for(int c=0;c<3;++c)sum+=srgb?transfer.decode[image.rgba[i+c]]:image.rgba[i+c];
+        auto b=image.alpha?image.rgba[i+3]:static_cast<std::uint8_t>(srgb?(sum*255+3*linear_max/2)/(3*linear_max):(sum+1)/3);
+        image.rgba[i]=image.rgba[i+1]=image.rgba[i+2]=b;image.rgba[i+3]=255;
     }
     // Scalar images already contain linear data, even with an explicit encoding.
     const bool encoded_color=srgb&&!scalar;
@@ -53,15 +66,16 @@ ImageMips make_mips(ImageData image,bool srgb,bool scalar){
         result.levels.push_back({w,h,static_cast<std::uint32_t>(result.bytes.size()),static_cast<std::uint32_t>(image.rgba.size())});
         result.bytes.insert(result.bytes.end(),image.rgba.begin(),image.rgba.end());if(w==1 && h==1)break;
         auto nw=std::max(1u,w/2),nh=std::max(1u,h/2);std::vector<std::uint8_t> next(std::size_t(nw)*nh*4);
-        // Area box resampling also accounts for the last row/column of NPOT images.
+        // Exact rational area weights include NPOT edges without half-byte drift.
+        // Q32 linear-light values keep color sums deterministic across native/WASM.
         for(unsigned y=0;y<nh;++y)for(unsigned x=0;x<nw;++x){
-            const double x0=double(x)*w/nw,x1=double(x+1)*w/nw,y0=double(y)*h/nh,y1=double(y+1)*h/nh;
-            double sums[4]{},total=0;
-            for(unsigned sy=unsigned(y0);sy<std::min(h,unsigned(std::ceil(y1)));++sy)for(unsigned sx=unsigned(x0);sx<std::min(w,unsigned(std::ceil(x1)));++sx){
-                auto weight=(std::min(x1,double(sx+1))-std::max(x0,double(sx)))*(std::min(y1,double(sy+1))-std::max(y0,double(sy)));total+=weight;
-                for(int c=0;c<4;++c){double v=image.rgba[(std::size_t(sy)*w+sx)*4+c]/255.;if(encoded_color && c<3)v=linear(v);sums[c]+=weight*v;}
+            const std::uint64_t x0=std::uint64_t(x)*w,x1=std::uint64_t(x+1)*w,y0=std::uint64_t(y)*h,y1=std::uint64_t(y+1)*h;
+            std::uint64_t sums[4]{},total=std::uint64_t(w)*h;
+            for(unsigned sy=unsigned(y0/nh);sy<(y1+nh-1)/nh;++sy)for(unsigned sx=unsigned(x0/nw);sx<(x1+nw-1)/nw;++sx){
+                auto weight=(std::min(x1,std::uint64_t(sx+1)*nw)-std::max(x0,std::uint64_t(sx)*nw))*(std::min(y1,std::uint64_t(sy+1)*nh)-std::max(y0,std::uint64_t(sy)*nh));
+                for(int c=0;c<4;++c){auto v=image.rgba[(std::size_t(sy)*w+sx)*4+c];sums[c]+=weight*(encoded_color&&c<3?transfer.decode[v]:v);}
             }
-            for(int c=0;c<4;++c){auto v=sums[c]/total;if(encoded_color && c<3)v=encoded(v);next[(std::size_t(y)*nw+x)*4+c]=byte(v);}
+            for(int c=0;c<4;++c)next[(std::size_t(y)*nw+x)*4+c]=encoded_color&&c<3?color_byte(sums[c],total):static_cast<std::uint8_t>((sums[c]+total/2)/total);
         }image.rgba=std::move(next);w=nw;h=nh;
     }return result;
 }
