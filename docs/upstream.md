@@ -1,10 +1,10 @@
 # 上游来源、版本与许可证
 
-调研日期：2026-11-15。所有参考仓库保存在忽略的 `.reference/` 中，不是构建依赖。
+调研日期：2026-11-15。早期下载的参考仓库保存在忽略的 `.reference/` 中；LightTransport 和 webgpu-pages-starter 使用各自本机工作树只读调研，均不是构建依赖。
 
 | 来源 | 本次读取版本 | 重点读取 | 处理与许可证 |
 |---|---|---|---|
-| [LightTransport](https://github.com/breeze028/LightTransport) | `47a461d267ed61c2c30c5054d98290ab107da581`（本机） | `src/pbrt/pbrt_loader.cpp`, `include/lt/scene.h`, `include/lt/material.h`, `src/scene/`, CMake | 根目录未发现 LICENSE；只读参考，不复制实现，不声明已获得再许可权 |
+| [LightTransport](https://github.com/breeze028/LightTransport) | `47a461d267ed61c2c30c5054d98290ab107da581`（本机） | `src/pbrt/pbrt_loader.cpp`, `include/lt/scene.h`, `include/lt/material.h`, `src/scene/`, CMake，后续 GPU megakernel 路径 | 核心 SDK 独立实现；WebGPU 消费者按用户本轮明确要求计划抽取，尚未执行。根目录未见 LICENSE，移植文件的声明/归属与第三方许可须逐项记录 |
 | [pbrt-v4](https://github.com/mmp/pbrt-v4) | `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f` | `parser.h/cpp`, `parser_test.cpp`, `paramdict.h`, `scene.h/cpp`, `util/file.cpp`, `util/transform.cpp` | Apache-2.0；参考语义，独立实现。未移植官方源文件或测试代码 |
 | [ingowald/pbrt-parser](https://github.com/ingowald/pbrt-parser) | `26571dae2a6dec05655116c9c3a5ac70421fee0b`（GitHub API/raw，clone 网络失败） | README, `pbrtParser/impl/syntactic/Scene.h`, `pbrtParser/include/pbrtParser/Scene.h` | Apache-2.0；主要针对 v3/Moana，不作为 v4 语法依据；无代码复制 |
 | [miniScene](https://github.com/ingowald/miniScene) | `2259c635f22db97ac9e1bd132990e063efef7c49` | README, `miniScene/Scene.h` | 文件头 Apache-2.0；参考共享 Mesh/Object/Instance 层次，无代码复制 |
@@ -13,6 +13,8 @@
 语法权威：[PBRT-v4 文件格式](https://pbrt.org/fileformat-v4)和上述固定 commit 的官方源码。文档含部分历史拼写示例，类型以 v4 源码及当前 ParameterDictionary 为准。
 
 2026-11-15 本地 Bathroom/Spaceship 回归纠正了此前的法线拼写判断：`paramdict.cpp:116` 使用官方类型 `normal`；之前只接受 `normal3` 的实现有误，现已修复，`normal3` 仅保留为显式 warning 的扩展。源场景未改写。
+
+同日 WebGPU 规划新增来源：[webgpu-pages-starter](https://github.com/breeze028/webgpu-pages-starter) 固定 `468bee0d5f3527d7523f826cf4c64872f70d3385`，MIT；读取其 `.agents/skills/webgpu-github-pages/`、实际 workflow 和 Vite/base/device 实现。本轮未复制代码、skill 或部署文件；计划后续复用时保留 MIT 归属。用户本轮明确要求以 LightTransport CUDA megakernel 为 WebGPU 消费者的移植基础，逐函数来源及适配边界见 [计划](webgpu-renderer-plan.md)，核心 SDK 仍不链接 LightTransport。
 
 ## 官方内部依赖与抽取边界
 

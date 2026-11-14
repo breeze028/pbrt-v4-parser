@@ -22,6 +22,8 @@ flowchart LR
 - miniScene 的 Mesh → Object → Instance 共享层次值得采用；简化材质转换不适合作为保真 IR。
 - mxpv/pbrt4 是 Rust 实现，可参考易用入口与 typed parameters；不引入 Rust 或重复 parser。
 
+后续 WebGPU **消费者**的复用决定见 [WebGPU Renderer 计划](webgpu-renderer-plan.md)：用户已明确指定以 LightTransport CUDA megakernel 为移植来源，选择性抽取并转为 WGSL。此决定不改变上述核心 SDK 的独立边界；原始 Scene IR 与 Renderer 派生 RenderScene 分离。部署流程采用用户指定的 `webgpu-pages-starter` skill，当前仅完成调研与规划。
+
 ## 所有权与数据边界
 
 事件、参数、源位置均拥有字符串，不暴露悬空 string_view。Scene 用 vector 管理实体，通过稳定的索引 ID 引用；几何定义与实例分离。Shape 保留原参数、对象变换、材质、介质与面积光状态；实例保留对象 ID 和独立动画变换。

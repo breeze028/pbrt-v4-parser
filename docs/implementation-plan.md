@@ -63,10 +63,9 @@
 
 ## 下一轮明确入口
 
-1. 从现有公共 API 做 Emscripten 工具链配置和 WASM 内存所有权测试，不另写 parser。
-2. 导出共享 mesh + placement + Scene IR 检查数据，先做内置场景 Inspector 和 WebGPU raster。
-3. 实际浏览器检查层次、参数、Transform、错误、相机与 WebGPU 不可用提示；之后再考虑 Compute path tracing。
-4. 启用真实 Windows/Linux CI、ASan/UBSan；继续扩展 Import、资源 schema、引用循环及大型官方场景覆盖，再进行远程发布。
+当前以 [WebGPU Renderer 计划](webgpu-renderer-plan.md) 为准：用户指定复用 LightTransport CUDA megakernel，发布参考 `webgpu-pages-starter` 的 skill。顺序更新为 W0 移植契约 → W1 单线程 WASM/数据布局/资源 → W2 Cornell Compute Path Tracer → W3 Spaceship → W4 Bathroom → W5 Inspector 完善与 Pages 验收；Inspector 自 W1 起逐步接入，不再要求先完成独立 Raster Viewer。
+
+原有核心库与 Tiny 的已完成项保持关闭。此轮完成源码调研和计划文档，没有启动 WASM/WebGPU 实现、运行浏览器验收或部署。
 
 当前未创建远程仓库、未公开发布、未设置版本 tag；LightTransport 工作树保持原状。Git 仅包含 SDK 源码、文档、CI 和小型原创测试数据。
 

@@ -89,3 +89,5 @@ Windows 指定 `--info build-msvc/Debug/pbrt4_info.exe`。该测试验证解析�
 本地 [Bathroom / Spaceship 示例](scenes/README.md) 可通过复制脚本准备资产，并用 `pbrt4_info --details --check-resources --geometry scene.pbrt` 检查资源与全部网格。这两份原始场景目前通过加载回归，**Tiny 尚不能正常渲染**，具体缺口见 [检查报告](docs/example-scenes-validation.md)。
 
 Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 的渲染支持在后续 WebGPU 阶段考虑。
+
+后续路线已整理为 [WebGPU Renderer 计划](docs/webgpu-renderer-plan.md)：以 LightTransport CUDA megakernel 为移植来源，C++ SDK/WASM 保留场景语义，WGSL 消费者依次推进 Cornell、Spaceship、Bathroom；Pages 流程参考指定 starter skill。该部分当前处于规划阶段。
