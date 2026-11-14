@@ -6,7 +6,7 @@
 |---|---|---|---|
 | [LightTransport](https://github.com/breeze028/LightTransport) | `47a461d267ed61c2c30c5054d98290ab107da581`（本机） | `src/pbrt/pbrt_loader.cpp`, `include/lt/scene.h`, `include/lt/material.h`, `src/scene/`, CMake | 根目录未发现 LICENSE；只读参考，不复制实现，不声明已获得再许可权 |
 | [pbrt-v4](https://github.com/mmp/pbrt-v4) | `b0bdf461ba5dd6504b70ebf0932acc0fe7aa744f` | `parser.h/cpp`, `parser_test.cpp`, `paramdict.h`, `scene.h/cpp`, `util/file.cpp`, `util/transform.cpp` | Apache-2.0；参考语义，独立实现。未移植官方源文件或测试代码 |
-| [ingowald/pbrt-parser](https://github.com/ingowald/pbrt-parser) | README 在线读取，Git clone 两次网络失败；源码固定版本读取结果后补 | README 的 syntactic/semantic API、Scene、依赖组织 | Apache-2.0；主要针对 v3/Moana，不作为 v4 语法依据；无代码复制 |
+| [ingowald/pbrt-parser](https://github.com/ingowald/pbrt-parser) | `26571dae2a6dec05655116c9c3a5ac70421fee0b`（GitHub API/raw，clone 网络失败） | README, `pbrtParser/impl/syntactic/Scene.h`, `pbrtParser/include/pbrtParser/Scene.h` | Apache-2.0；主要针对 v3/Moana，不作为 v4 语法依据；无代码复制 |
 | [miniScene](https://github.com/ingowald/miniScene) | `2259c635f22db97ac9e1bd132990e063efef7c49` | README, `miniScene/Scene.h` | 文件头 Apache-2.0；参考共享 Mesh/Object/Instance 层次，无代码复制 |
 | [mxpv/pbrt4](https://github.com/mxpv/pbrt4) | `c4bb00e659978e6396b638cc1aa8b96e813a9cd3` | README, Cargo.toml, `src/scene.rs`, `src/param.rs` | Apache-2.0；Rust + glam + thiserror，参考 API 与参数表达，无代码复制 |
 
