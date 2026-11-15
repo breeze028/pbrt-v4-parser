@@ -1,8 +1,12 @@
 # pbrt-v4-parser
 
-独立、仅依赖标准库的 C++20 PBRT-v4 场景解析 SDK。用于把 PBRT 文件加载为渲染器无关的 Scene IR，可接入 CPU、CUDA、DXR、Vulkan 或 WebGPU 渲染器；核心库不依赖这些后端。
+English | [简体中文](README.zh-CN.md)
 
-当前为 **0.1 开发版**：核心 Parser、SceneBuilder、共享实例 IR、可选 PLY/Geometry Utilities、CLI 和 Tiny CPU Path Tracer 已可运行。**WASM/WebGPU 尚未实现；尚未完成首版发布验收。** 覆盖与限制见 [Compatibility](docs/compatibility.md)，本机证据见 [实施记录](docs/implementation-plan.md)。
+An independent C++20 PBRT-v4 scene parsing SDK with **no dependencies beyond the standard library**. Load PBRT files into a renderer-independent Scene IR for CPU, CUDA, DXR, Vulkan, or WebGPU consumers. The core library does not depend on any rendering backend.
+
+Currently a **0.1 development version**: the Parser, SceneBuilder, shared-instance IR, optional PLY/geometry utilities, CLI, and Tiny CPU Path Tracer are working. The single-threaded WASM consumer and WebGPU Scene Lab are published and render Cornell Box, Spaceship, and Bathroom. See [compatibility](docs/compatibility.md), the [implementation record](docs/implementation-plan.md), and [WebGPU validation](docs/webgpu-scenes-validation.md) for coverage, evidence, and limitations. Detailed documentation is currently in Chinese.
+
+[Try WebGPU Scene Lab](https://breeze028.github.io/pbrt-v4-parser/) · [Download pinned scene assets](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1)
 
 ```cpp
 #include <pbrt4/pbrt4.h>
@@ -23,7 +27,7 @@ int main() {
 }
 ```
 
-构建要求：CMake ≥ 3.21、C++20 编译器。已在 Windows MSVC 19.38 与 GCC 10.3 构建；Linux CI 已配置，尚未执行。无需下载任何依赖。
+Build requirements: CMake ≥ 3.21 and a C++20 compiler. Local builds have been verified with Windows MSVC 19.38 and GCC 10.3; Windows and Linux CI have passed. The core SDK requires no dependency downloads.
 
 ```powershell
 cmake --preset msvc
@@ -33,7 +37,7 @@ build-msvc/Debug/pbrt4_info.exe testdata/cornell.pbrt
 build-msvc/Debug/tiny_pathtracer.exe scenes/cornell-box/scene-v4.pbrt out.ppm 64 256
 ```
 
-Linux 或已设置编译器环境的 Ninja：
+On Linux, or with a configured compiler environment:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -42,9 +46,9 @@ ctest --test-dir build --output-on-failure
 ./build/tiny_pathtracer scenes/cornell-box/scene-v4.pbrt out.ppm 64 256
 ```
 
-约 250 行的 [Tiny Path Tracer](examples/tiny_pathtracer/main.cpp) 以 `scenes/cornell-box/scene-v4.pbrt` 为主要验收场景，使用同一 C++ SDK，提供中位数 BVH、Lambertian、面积光直接采样、常量环境光、triangle filter、Monte Carlo 反弹与 Russian roulette，输出 P6 PPM。可选末尾参数为预览图像最长边；省略则保留 Film 分辨率。球体离散化只在 Geometry 消费层显式开启。它会拒绝不支持的材质/纹理/动画等渲染输入，不能视为 PBRT 的渲染结果复现。
+The roughly 250-line [Tiny Path Tracer](examples/tiny_pathtracer/main.cpp) uses the same SDK, with Cornell Box as its primary validation scene. It provides a median-split BVH, Lambertian shading, direct area-light sampling, constant environment lighting, a triangle filter, Monte Carlo bounces, and Russian roulette, writing P6 PPM output. The optional final argument limits the longest image dimension; omit it to retain the Film resolution. Sphere tessellation is explicitly enabled only in the geometry consumer. Unsupported materials, textures, animation, and other rendering inputs are rejected. Tiny is not a reproduction of PBRT's renderer.
 
-普通 CMake 集成：
+CMake integration:
 
 ```cmake
 add_subdirectory(external/pbrt-v4-parser EXCLUDE_FROM_ALL)
@@ -52,9 +56,9 @@ target_link_libraries(my_renderer PRIVATE pbrt4::pbrt4)
 # Optional: target_link_libraries(my_renderer PRIVATE pbrt4::geometry)
 ```
 
-也可用 `FetchContent_Declare(pbrt4 SOURCE_DIR /path/to/pbrt-v4-parser)` + `FetchContent_MakeAvailable(pbrt4)`；发布远程后可改为 Git URL 和固定 commit。库作为子项目时默认不构建测试、CLI、示例。核心构建可用 `-DPBRT4_BUILD_GEOMETRY=OFF` 关闭可选几何模块。
+Alternatively, use `FetchContent_Declare(pbrt4 SOURCE_DIR /path/to/pbrt-v4-parser)` with `FetchContent_MakeAvailable(pbrt4)`, or this repository's Git URL pinned to a commit. As a subproject, tests, CLI tools, and examples are disabled by default. Disable the optional geometry module with `-DPBRT4_BUILD_GEOMETRY=OFF`.
 
-安装与包消费：
+Installation and package consumption:
 
 ```sh
 cmake --install build --prefix /path/to/install
@@ -66,36 +70,34 @@ find_package(pbrt4 0.1 CONFIG REQUIRED)
 target_link_libraries(my_renderer PRIVATE pbrt4::pbrt4)
 ```
 
-向消费者的配置命令传入 `-DCMAKE_PREFIX_PATH=/path/to/install`。`BUILD_SHARED_LIBS=ON` 可构建共享库。
+Pass `-DCMAKE_PREFIX_PATH=/path/to/install` when configuring the consumer. Set `BUILD_SHARED_LIBS=ON` to build shared libraries.
 
-三层公共 API：
+The public API has three layers:
 
-| 层次 | 入口 | 责任 |
+| Layer | Entry points | Responsibility |
 |---|---|---|
-| 语法 | `parser.h`: `Tokenizer`, `parse_file`, `parse_string`, `ParserTarget` | 原始指令、typed parameters、文件边界与诊断 |
-| 场景 | `pbrt4.h`: `load`, `load_string`, `SceneBuilder` | 图形状态、Transform、具名引用、共享对象与实例 |
-| 可选几何 | `geometry.h`: `load_ply`, `extract_geometry`, `bake_instance` | 原始局部网格、共享 mesh instances、显式静态烘焙 |
+| Syntax | `parser.h`: `Tokenizer`, `parse_file`, `parse_string`, `ParserTarget` | Original directives, typed parameters, file boundaries, and diagnostics |
+| Scene | `pbrt4.h`: `load`, `load_string`, `SceneBuilder` | Graphics state, transforms, named references, shared objects, and instances |
+| Optional geometry | `geometry.h`: `load_ply`, `extract_geometry`, `bake_instance` | Original local meshes, shared mesh instances, and explicit static baking |
 
-Include 与 Import 均支持自定义虚拟文件系统；相对路径默认相对根 PBRT 文件。光谱、颜色空间、材质类型、动画端点和原始参数均保留，不改写成简化 PBR 材质。解析错误带文件、行、列，不退出进程。详见 [API](docs/api.md)、[架构](docs/architecture.md)、[上游与许可证](docs/upstream.md)。
+Include and Import support a custom virtual filesystem; relative paths resolve against the root PBRT file by default. Spectra, color spaces, material types, animation endpoints, and original parameters are preserved instead of being converted into simplified PBR materials. Parsing errors include file, line, and column information and do not terminate the process. See the [API](docs/api.md), [architecture](docs/architecture.md), and [upstream and licensing notes](docs/upstream.md).
 
-官方回归只下载约 0.3 MB 的固定版本描述文件，不下载大型资产：
+The official-scene regression downloads approximately 0.3 MB of pinned scene descriptions, without large assets:
 
 ```sh
 python tools/official_regression.py --info build/pbrt4_info
 ```
 
-Windows 指定 `--info build-msvc/Debug/pbrt4_info.exe`。该测试验证解析与 IR，不验证官方场景的外部 PLY/贴图解码或渲染。第三方场景保留其各自许可证；SDK 新实现使用 Apache-2.0。
+On Windows, use `--info build-msvc/Debug/pbrt4_info.exe`. This checks parsing and Scene IR, not external PLY/image decoding or rendering of those official scenes. Third-party scenes retain their own licenses; the SDK's new implementation uses Apache-2.0.
 
-本地 [Bathroom / Spaceship 示例](scenes/README.md) 可通过复制脚本准备资产，并用 `pbrt4_info --details --check-resources --geometry scene.pbrt` 检查资源与全部网格。这两份原始场景目前通过加载回归，**Tiny 尚不能正常渲染**，具体缺口见 [检查报告](docs/example-scenes-validation.md)。
+The [Bathroom and Spaceship examples](scenes/README.md) can be prepared with the local copy script or `python tools/web_scene_assets.py fetch`. Inspect resources and all meshes with `pbrt4_info --details --check-resources --geometry scene.pbrt`. Both original scenes pass loading regressions and are rendered by the separate WebGPU consumer. **Tiny remains limited to Cornell Box**; its unsupported features are documented in the [scene inspection report](docs/example-scenes-validation.md).
 
-Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 由独立 WebGPU 消费者渲染。
+The independent [WebGPU Scene Lab](web/README.md) uses the same C++ SDK → single-threaded WASM Worker → BLAS/TLAS → WGSL megakernel. **Cornell Box, Spaceship, and Bathroom have all been rendered in a real browser**, including the published Pages site. Supported features include GGX metals, rough and ideal glass, an LT-style coating approximation, TGA images and mipmaps, independent alpha masks, bump mapping, an Inspector, and linear HDR export. Geometry, material records, decoded images, and mip data are compared between native and WASM builds. The documented RGB and material approximations do not provide full PBRT equivalence. Setup instructions are in the Web README; actual evidence is in the [two-scene validation record](docs/webgpu-scenes-validation.md).
 
-独立 [WebGPU Scene Lab](web/README.md) 使用同一 C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel。**Cornell、Spaceship、Bathroom 均已在真实浏览器渲染**，支持 GGX 金属、粗糙/理想玻璃、LT 涂层近似、TGA/mip、独立 alpha、bump、Inspector 与线性 HDR 导出。三场景几何/材质/图片数据已做 native/WASM 一致性比较，已记录的 RGB 与材质近似不等同于完整 PBRT。安装与启动见 Web README，实际证据见 [两场景实施记录](docs/webgpu-scenes-validation.md)。
+![WebGPU Cornell Box preview](docs/assets/webgpu-cornell.jpg)
 
-![WebGPU Cornell 实际预览](docs/assets/webgpu-cornell.jpg)
+![Spaceship rendered on the published WebGPU site](docs/assets/webgpu-online-spaceship.jpg)
 
-![WebGPU Spaceship 实际预览](docs/assets/webgpu-online-spaceship.jpg)
+![Bathroom rendered on the published WebGPU site](docs/assets/webgpu-online-bathroom.jpg)
 
-![WebGPU Bathroom 实际预览](docs/assets/webgpu-online-bathroom.jpg)
-
-[在线 WebGPU Scene Lab](https://breeze028.github.io/pbrt-v4-parser/) · [固定示例资源](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1)。首次切换 Bathroom 会下载约 64.5 MB 原始资源包并生成 mip，需要支持 WebGPU 的浏览器。
+The first Bathroom load downloads approximately 64.5 MB of original resources and generates mipmaps. A browser with WebGPU support is required. Scene packages exclude LightTransport `.lt` and `.ivol` files.
