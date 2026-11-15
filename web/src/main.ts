@@ -33,20 +33,33 @@ worker.onmessage=async ({data}:{data:Loaded|{type:string;generation:number;messa
  if(data.generation!==generation)return;
  if(data.type==='progress'){$('overlay').textContent=(data as {message:string}).message;return;}
  if(data.type==='error'){$('status').textContent=(data as {message:string}).message;$('overlay').textContent=(data as {message:string}).message;return;}
- const loaded=data as Loaded;imageBytes=loaded.buffers[4];packedRecords=new Uint32Array(loaded.buffers[3]);show(loaded.metadata);$<HTMLInputElement>('depth').value=String(loaded.metadata.maxDepth);$('load-time').textContent=`WASM 加载 ${(loaded.milliseconds/1000).toFixed(2)} s`;
- try{await ready;if(gpuError)throw gpuError;if(loaded.generation!==generation)return;await renderer.load(loaded.metadata,loaded.buffers);$('overlay').hidden=loaded.metadata.renderable;}catch(e){renderer.disposeScene();$('status').textContent=String(e);$('indicator').className='error';$('overlay').textContent=String(e);$('overlay').hidden=false;}
+ const loaded=data as Loaded;imageBytes=loaded.buffers[4];packedRecords=new Uint32Array(loaded.buffers[3]);show(loaded.metadata);$('load-time').textContent=`WASM 加载 ${(loaded.milliseconds/1000).toFixed(2)} s`;
+ try{await ready;if(gpuError)throw gpuError;if(loaded.generation!==generation)return;await renderer.load(loaded.metadata,loaded.buffers);applyDepth(false);$('overlay').hidden=loaded.metadata.renderable;}catch(e){renderer.disposeScene();$('status').textContent=String(e);$('indicator').className='error';$('overlay').textContent=String(e);$('overlay').hidden=false;}
 };
-function load(){generation++;renderer.disposeScene();imageBytes=undefined;packedRecords=undefined;$('texture-card').hidden=true;$('gpu-checks').textContent='尚未运行';$('overlay').hidden=false;$('overlay').textContent='正在读取场景包…';worker.postMessage({generation,scene:$<HTMLSelectElement>('scene').value,base:new URL(import.meta.env.BASE_URL,location.origin).href});}
+function load(){$<HTMLInputElement>('manual-depth').disabled=true;$<HTMLInputElement>('depth').disabled=true;$('depth-info').textContent='正在读取场景深度…';generation++;renderer.disposeScene();imageBytes=undefined;packedRecords=undefined;$('texture-card').hidden=true;$('gpu-checks').textContent='尚未运行';$('overlay').hidden=false;$('overlay').textContent='正在读取场景包…';worker.postMessage({generation,scene:$<HTMLSelectElement>('scene').value,base:new URL(import.meta.env.BASE_URL,location.origin).href});}
 $<HTMLSelectElement>('scene').onchange=load;
 $('reset').onclick=()=>{if(metadata){renderer.camera=[...metadata.camera.transform];renderer.reset();}};
 $('restart').onclick=()=>{renderer.paused=false;renderer.reset();};$('pause').onclick=()=>{renderer.paused=!renderer.paused;if(!renderer.paused && renderer.maxSpp && renderer.sample>=renderer.maxSpp){renderer.maxSpp=0;$<HTMLInputElement>('target-spp').value='0';}$('pause').textContent=renderer.paused?'继续':'暂停';};
 const validate=document.createElement('button');validate.textContent='GPU 自检';document.querySelector('.toolbar')!.append(validate);
 validate.onclick=async()=>{validate.disabled=true;const current=generation;try{const n=await renderer.validate();if(current!==generation)return;$('status').textContent=`GPU 自检通过 · ray ${n.rays}/${n.rays} · BSDF ${n.bsdf.checked} · tex ${n.textures.texels}`;$('gpu-checks').textContent=JSON.stringify(n,null,2);console.info('GPU checks',n);}catch(e){if(current===generation){$('status').textContent=String(e);$('indicator').className='error';}}finally{validate.disabled=false;}};
 const checks=document.createElement('details');checks.innerHTML='<summary>GPU 自检结果</summary><pre id="gpu-checks">尚未运行</pre>';document.querySelector('.right')!.append(checks);
-const settings=document.createElement('details');settings.className='settings';settings.innerHTML='<summary>渲染设置与 HDR 导出</summary><div class="settings-grid"><label>目标 spp（0 = 持续）<input id="target-spp" type="number" min="0" max="100000" value="0"></label><label>反弹深度<input id="depth" type="number" min="1" max="1024" value="8"></label><label>随机种子<input id="seed" type="number" min="0" max="4294967295" value="1"></label><label class="clamp"><input id="lod0" type="checkbox">强制 LOD 0</label><button id="export-hdr">导出线性 HDR（PFM）</button></div>';document.querySelector('.footer-note')!.after(settings);
+const settings=document.createElement('details');settings.className='settings';settings.innerHTML='<summary>渲染设置与 HDR 导出</summary><div class="settings-grid"><label>目标 spp（0 = 持续）<input id="target-spp" type="number" min="0" max="100000" value="0"></label><label>随机种子<input id="seed" type="number" min="0" max="4294967295" value="1"></label><label class="clamp"><input id="lod0" type="checkbox">强制 LOD 0</label><button id="export-hdr">导出线性 HDR（PFM）</button></div>';document.querySelector('.footer-note')!.after(settings);
 const adapterInfo=document.createElement('p');adapterInfo.id='gpu-adapter';adapterInfo.className='hint';settings.after(adapterInfo);
 $<HTMLInputElement>('target-spp').oninput=e=>{renderer.maxSpp=Math.max(0,Math.min(100000,Math.floor(Number((e.target as HTMLInputElement).value)||0)));};
-$<HTMLInputElement>('depth').oninput=e=>{renderer.depth=Math.max(1,Math.min(1024,Math.floor(Number((e.target as HTMLInputElement).value)||1)));renderer.reset();};
+const depthControls=document.createElement('div');depthControls.className='depth-controls';depthControls.innerHTML='<label class="clamp"><input id="manual-depth" type="checkbox" disabled>手动控制路径深度</label><label for="depth">最大深度（max_depth）</label><input id="depth" type="number" min="1" max="1024" step="1" value="8" disabled><span id="depth-info" class="hint" aria-live="polite">正在读取场景深度…</span>';document.querySelector('.render-controls')!.after(depthControls);
+let manualDepth:number|undefined;
+function applyDepth(reset=true){
+ if(!metadata)return;
+ const manual=$<HTMLInputElement>('manual-depth');manual.disabled=false;
+ if(manual.checked && manualDepth===undefined)manualDepth=metadata.maxDepth;
+ renderer.depth=manual.checked?manualDepth!:metadata.maxDepth;
+ const input=$<HTMLInputElement>('depth');input.disabled=!manual.checked;input.value=String(renderer.depth);
+ $('depth-info').textContent=`场景默认：${metadata.maxDepth} · 当前：${renderer.depth}${manual.checked?'（手动）':'（跟随场景）'}`;
+ if(reset)renderer.reset();
+}
+$<HTMLInputElement>('manual-depth').onchange=()=>applyDepth();
+$<HTMLInputElement>('depth').oninput=e=>{const value=(e.target as HTMLInputElement).valueAsNumber;if(!Number.isFinite(value))return;manualDepth=Math.max(1,Math.min(1024,Math.floor(value)));applyDepth();};
+$<HTMLInputElement>('depth').onchange=()=>applyDepth(false);
 $<HTMLInputElement>('seed').oninput=e=>{renderer.seed=Number((e.target as HTMLInputElement).value)>>>0;renderer.reset();};
 $<HTMLInputElement>('lod0').onchange=e=>{renderer.lod0=(e.target as HTMLInputElement).checked;renderer.reset();};
 for(const [id,label] of [['enable-alpha','透明遮罩'],['enable-bump','Bump']]){const wrap=document.createElement('label');wrap.className='clamp';wrap.innerHTML=`<input id="${id}" type="checkbox" checked>${label}`;document.querySelector('.settings-grid')!.append(wrap);}

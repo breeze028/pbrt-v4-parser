@@ -43,7 +43,7 @@ npm run dev --prefix web -- --port 5180
 
 - 拖动画布旋转，滚轮前后移动；聚焦画布后 WASD / QE 移动、方向键转头，Shift 加速。重置相机恢复原 PBRT 构图。
 - 预览最长边 128 / 256 / 384 / 512，保持 Film 纵横比。曝光只影响显示；相机、分辨率、深度、seed、LOD / alpha / bump 开关会清空累积。
-- 渲染设置可指定目标 spp（0 持续）、深度与随机种子。达到目标自动暂停。PFM 导出包含按每像素计数归一化后的线性 RGB，不含曝光或 tonemap。
+- 画布下方提供“手动控制路径深度”开关与 1–1024 的整数输入，显示场景默认值和当前生效值。默认关闭，跟随 PBRT Integrator 的 maxdepth（Cornell / Spaceship 65、Bathroom 17）；开启后手动值跨场景保留，关闭即恢复当前场景默认。切换模式或修改深度会清空累积并恢复渲染。深度是上限，Russian roulette 等仍可能提前终止路径；原有最多 12 个额外透射事件约定保持不变。折叠的渲染设置可指定目标 spp（0 持续）与随机种子。达到目标自动暂停。PFM 导出包含按每像素计数归一化后的线性 RGB，不含曝光或 tonemap。
 - `GPU 自检` 比较 GPU BVH 与 CPU brute-force 命中/距离/重心/法线，执行 BSDF 解析值、PDF/能量/Fresnel/TIR、MIS 极端值、纹理编码/wrap/mip、bump 法线检查，并读取实际渲染诊断。CPU 求交在另一个 Worker 中运行。
 - Texture Inspector 展示原始声明与解码后预览、尺寸、mip、颜色/数据角色。Geometry / Material / Light / Object / Instance 参数保持只读，不用简化表单替换原始 PBRT。
 
