@@ -4,8 +4,15 @@
 // Directions are away from the surface, in a frame where wo.z > 0.
 struct Bsdf { color:vec3f, kind:u32, eta:vec3f, ax:f32, k:vec3f, ay:f32 }
 struct Scatter { wi:vec3f, pdf:f32, weight:vec3f, delta:u32, eta:f32, transmitted:u32 }
-fn power(a:f32,b:f32)->f32 {
-  let scale=max(a,b);if(scale<=0){return 0;}let x=a/scale;let y=b/scale;return x*x/(x*x+y*y);
+fn power(a: f32, b: f32) -> f32 {
+  let scale = max(a, b);
+  if (scale <= 0) {
+    return 0;
+  }
+
+  let x = a / scale;
+  let y = b / scale;
+  return x * x / (x * x + y * y);
 }
 fn invalid_scatter()->Scatter {return Scatter(vec3f(0),0,vec3f(0),0u,1,0u);}
 fn square(v:f32)->f32 {return v*v;}

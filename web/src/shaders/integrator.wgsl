@@ -28,9 +28,14 @@ fn visibility(initial:Ray,distance:f32,width:f32,state:ptr<function,u32>)->vec3f
 // Teaching strategies: defaults (0 bits) retain the original MIS estimator.
 fn use_nee()->bool{return (frame.features.x&4u)==0u;}
 fn use_mis()->bool{return (frame.features.x&8u)==0u;}
-fn hit_weight(pdf:f32,light:f32,delta:bool)->f32 {
-  if(delta || !use_nee()){return 1.;}
-  if(!use_mis()){return 0.;}return power(pdf,light);
+fn hit_weight(pdf: f32, light: f32, delta: bool) -> f32 {
+  if (delta || !use_nee()) {
+    return 1.;
+  }
+  if (!use_mis()) {
+    return 0.;
+  }
+  return power(pdf, light);
 }
 fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
   var ray=initial;var radiance=vec3f(0);var throughput=vec3f(1);var previous=ray.o;var previous_pdf=0.;var previous_delta=true;
@@ -88,7 +93,10 @@ fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
         // snippet:nee:start
         let mis = select(1., power(pdf, bsdf_density), use_mis());
         let direct = clamp_sample(
-          throughput * value * le * visible * (abs(wi.z) * mis / max(pdf, 1e-30)), depth);
+          throughput * value * le * visible
+            * (abs(wi.z) * mis / max(pdf, 1e-30)),
+          depth
+        );
         radiance += direct;
         observe(8u, vec4f(direct, mis));
         observe(10u, vec4f(p + direction * min(distance, 1e4),
