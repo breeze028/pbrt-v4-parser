@@ -16,10 +16,10 @@ workerScope.onmessage=async ({data}:{data:{generation:number;base:string;scene:s
       return factory({locateFile:(p:string)=>new URL('wasm/'+p,data.base).href});
     })();
     const sceneURL=new URL('scenes/'+data.scene+'/',data.base);
-    const manifestResponse=await fetch(new URL('manifest.json',sceneURL));if(!manifestResponse.ok)throw Error('场景包未准备：'+data.scene);
+    const manifestResponse=await fetch(new URL('manifest.json',sceneURL));if(!manifestResponse.ok)throw Error('Scene resource bundle is unavailable: '+data.scene);
     const manifest=await manifestResponse.json() as {version:number;root:string;bytes:number;files:{path:string;offset:number;size:number;sha256:string}[]};
     if(manifest.version!==1)throw Error('Unsupported resource bundle version');
-    send({type:'progress',generation:data.generation,message:'正在下载场景资源…'});
+    send({type:'progress',generation:data.generation,message:'Downloading original scene resources…'});
     const response=await fetch(new URL('resources.bin',sceneURL));if(!response.ok)throw Error('Resource HTTP '+response.status);
     const packed=await response.arrayBuffer();if(packed.byteLength!==manifest.bytes)throw Error('Resource bundle length mismatch');
     wasm=await modulePromise;const root='/scene-'+data.generation;wasm.FS.mkdirTree(root);dirs.add(root);
@@ -34,7 +34,7 @@ workerScope.onmessage=async ({data}:{data:{generation:number;base:string;scene:s
       wasm.FS.writeFile(path,bytes);files.push(path);
     }
     if(!seen.has(manifest.root))throw Error('Root scene is absent from manifest');
-    send({type:'progress',generation:data.generation,message:'C++ WASM 正在解析并构建 BLAS/TLAS…'});
+    send({type:'progress',generation:data.generation,message:'Parsing PBRT and building scene acceleration structures…'});
     const path=new TextEncoder().encode(root+'/'+manifest.root+'\0');pointer=wasm._malloc(path.length);wasm.HEAPU8.set(path,pointer);
     handle=wasm._p4_open(pointer);if(!handle)throw Error('WASM scene allocation failed');
     const metadata=JSON.parse(wasm.UTF8ToString(wasm._p4_metadata(handle))) as Metadata;

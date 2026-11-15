@@ -94,10 +94,10 @@ Tiny 的范围限定为 Cornell Box；Bathroom / Spaceship 由独立 WebGPU 消�
 
 独立 [WebGPU Scene Lab](web/README.md) 使用同一 C++ SDK → 单线程 WASM Worker → BLAS/TLAS → WGSL megakernel。**Cornell、Spaceship、Bathroom 均已在真实浏览器渲染**，支持 GGX 金属、粗糙/理想玻璃、LT 涂层近似、TGA/mip、独立 alpha、bump、Inspector 与线性 HDR 导出。三场景几何/材质/图片数据已做 native/WASM 一致性比较，已记录的 RGB 与材质近似不等同于完整 PBRT。安装与启动见 Web README，实际证据见 [两场景实施记录](docs/webgpu-scenes-validation.md)。
 
-![WebGPU Cornell 实际预览](docs/assets/webgpu-cornell.jpg)
+![WebGPU Spaceship 实际预览](docs/assets/webgpu-ui-showcase.jpg)
 
-![WebGPU Spaceship 实际预览](docs/assets/webgpu-online-spaceship.jpg)
-
-![WebGPU Bathroom 实际预览](docs/assets/webgpu-online-bathroom.jpg)
+![WebGPU Bathroom 实际预览](docs/assets/webgpu-ui-inspect.jpg)
 
 [在线 WebGPU Scene Lab](https://breeze028.github.io/pbrt-v4-parser/) · [固定示例资源](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1)。首次切换 Bathroom 会下载约 64.5 MB 原始资源包并生成 mip，需要支持 WebGPU 的浏览器。
+
+英文界面默认打开 **Showcase**，切换 **Inspect** 可使用虚拟化搜索列表、结构化 Properties、按需 Raw Data 和 Diagnostics 抽屉。见 [UI 验证记录](docs/webgpu-ui-redesign.md)。

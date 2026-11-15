@@ -35,17 +35,21 @@ Remove-Item Env:PBRT4_WEB_LARGE_SCENES
 npm run dev --prefix web -- --port 5180
 ```
 
-打开终端打印的 URL。Linux 原生配置改用 `-DCMAKE_BUILD_TYPE=Release` 并省略 Visual Studio / `--config` 参数。`PBRT4_WEB_PACK` 可指定 native packer 路径。只准备 Cornell 时，省略 `prepare:assets` 的三个名称及大场景测试变量；默认 WASM 测试为 4 项，全部资产齐备后为 6 项。
+打开终端打印的 URL。Linux 原生配置改用 `-DCMAKE_BUILD_TYPE=Release` 并省略 Visual Studio / `--config` 参数。`PBRT4_WEB_PACK` 可指定 native packer 路径。只准备 Cornell 时，省略 `prepare:assets` 的三个名称及大场景测试变量；默认 WASM 测试为 5 项，全部资产齐备后为 7 项。
 
 修改 C++ 后必须重跑 `build:wasm` 和 `prepare:assets`，再构建前端；单独 `npm run build` 只做类型检查与 Vite 打包。WASM 与原始场景包、许可证目录均由脚本生成，不将大模型、node_modules 或工具链放进 Git。
 
-## 操作
+## 界面与操作
 
-- 拖动画布旋转，滚轮前后移动；聚焦画布后 WASD / QE 移动、方向键转头，Shift 加速。重置相机恢复原 PBRT 构图。
-- 预览最长边 128 / 256 / 384 / 512，保持 Film 纵横比。曝光只影响显示；相机、分辨率、深度、seed、LOD / alpha / bump 开关会清空累积。
-- 画布下方提供“手动控制路径深度”开关与 1–1024 的整数输入，显示场景默认值和当前生效值。默认关闭，跟随 PBRT Integrator 的 maxdepth（Cornell / Spaceship 65、Bathroom 17）；开启后手动值跨场景保留，关闭即恢复当前场景默认。切换模式或修改深度会清空累积并恢复渲染。深度是上限，Russian roulette 等仍可能提前终止路径；原有最多 12 个额外透射事件约定保持不变。折叠的渲染设置可指定目标 spp（0 持续）与随机种子。达到目标自动暂停。PFM 导出包含按每像素计数归一化后的线性 RGB，不含曝光或 tonemap。
-- `GPU 自检` 比较 GPU BVH 与 CPU brute-force 命中/距离/重心/法线，执行 BSDF 解析值、PDF/能量/Fresnel/TIR、MIS 极端值、纹理编码/wrap/mip、bump 法线检查，并读取实际渲染诊断。CPU 求交在另一个 Worker 中运行。
-- Texture Inspector 展示原始声明与解码后预览、尺寸、mip、颜色/数据角色。Geometry / Material / Light / Object / Instance 参数保持只读，不用简化表单替换原始 PBRT。
+界面文案、加载状态和错误提示均为英文。设计与实际浏览器证据见 [UI redesign](../docs/webgpu-ui-redesign.md)。
+
+- 默认 **Showcase**：Spaceship / Bathroom / Cornell 场景选择器位于顶部，完整 Film 图像为主体；浮动工具栏统一相机重置、暂停、重新累积、Exposure、Render settings、Fullscreen 和帮助。侧栏默认隐藏。
+- **Inspect**：Scene Explorer 按类别分组，支持名称、类型、源文件与参数搜索。固定行高虚拟列表只创建可见区域和 overscan 行。选择节点后查看 Properties；原始对象完整数据在按需打开的 **Raw Data** 标签页中，不改变参数精度。
+- ≥1440px 支持三栏、可调宽侧栏；1100–1439px 的 Properties 使用 Drawer；更窄时 Explorer 和 Properties 均为按需 Drawer。侧栏及窗口缩放只重新适配显示框，保留 Film 比例、GPU backbuffer 和累积；**Preview resolution** 才改变采样分辨率（128 / 256 / 384 / 512）。
+- 拖动画布旋转，滚轮前后移动；聚焦画布后 WASD / QE 移动，方向键转头，Shift 加速。R 重置相机，Space 暂停/继续，I 切模式，/ 搜索，F 请求全屏。图标按钮带英文 Tooltip 和可访问名称。Fullscreen 依赖宿主浏览器许可；嵌入式浏览器拒绝时显示英文提示。
+- **Render settings** 保留目标 spp（0 持续）、seed、1–1024 的手动深度、clamp / LOD / alpha / bump 和线性 **Export HDR**。深度开关默认关闭，使用 PBRT maxdepth（Cornell / Spaceship 65、Bathroom 17）；手动值跨场景保留。更改相机或采样设置会重新累积，达到目标自动暂停。曝光仅改变显示，不重置累积或修改导出的线性 RGB。
+- **Diagnostics** 在底部抽屉中按 Scene、GPU checks、Activity 分页；**Run GPU self-test** 仍进行真实 GPU/CPU 求交、BSDF、纹理和 bump 检查。没有 GPU 帧率、计时等虚构统计。Activity 的加载时间为前端测得的整条加载流程时间，不是 GPU 耗时。
+- Inspector 保留 Texture 预览、尺寸、mip 与颜色/数据角色；Geometry / Material / Light / Object / Instance 数据均只读。没有新增 viewport picking。深度预算、Russian roulette 与最多 12 个额外透射事件约定不变。
 
 ## 生产构建与 Pages
 

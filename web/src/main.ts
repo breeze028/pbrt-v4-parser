@@ -1,80 +1,167 @@
 import './style.css';
 import { Renderer } from './renderer/renderer';
 import type { Entity,Loaded,Metadata } from './model';
-document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
-<header><div class="brand"><span class="mark">P</span><strong>PBRT <span>/ SCENE LAB</span></strong><small>WebGPU · SDK consumer</small></div><a href="https://github.com/mmp/pbrt-v4">PBRT v4 ↗</a></header>
-<main><aside class="left"><div class="eyebrow">WORKSPACE</div><h1>场景检查器</h1><label for="scene">示例场景</label><select id="scene"><option value="cornell-box">Cornell Box</option><option value="spaceship">Spaceship</option><option value="bathroom">Bathroom</option></select><p class="hint">同一套 C++ Parser，通过 WASM 加载原始 PBRT。</p><div class="divider"></div><div class="row"><h2>场景层次</h2><span id="shape-count" class="tag">—</span></div><nav id="tree"></nav></aside>
-<section class="viewport"><div class="toolbar"><span><i id="indicator"></i><span id="status">正在初始化 WebGPU…</span></span><button id="reset">重置相机</button></div><div class="canvas-wrap"><canvas id="canvas" aria-label="WebGPU 路径追踪预览"></canvas><div class="overlay" id="overlay">正在加载 Cornell Box</div></div><div class="render-controls"><div><span class="eyebrow">PROGRESSIVE PATH TRACING</span><div class="metric"><b id="spp">0</b><span>spp · 累积样本</span></div></div><div class="control"><label for="exposure">曝光 <output id="exposure-value">1.0</output></label><input id="exposure" type="range" min="0.2" max="3" step="0.1" value="1"></div><button id="pause">暂停</button><button id="restart">重新累积</button><div class="control"><label for="resolution">预览最长边</label><select id="resolution"><option>128</option><option>256</option><option selected>384</option><option>512</option></select></div><label class="clamp"><input id="clamp" type="checkbox" checked>采样钳制 64/8</label></div><div class="footer-note">拖动旋转 · 滚轮缩放 · 聚焦画布后 WASD/QE 移动、方向键转头 <span id="load-time"></span></div></section>
-<aside class="right"><div class="eyebrow">INSPECTOR</div><h2 id="selection">相机</h2><div id="summary" class="summary"></div><div class="divider"></div><div class="row"><h2>原始 PBRT 参数</h2><span class="tag">Scene IR</span></div><pre id="parameters"></pre><figure id="texture-card" hidden><canvas id="texture-preview" aria-label="贴图预览"></canvas><figcaption id="texture-info"></figcaption></figure><details><summary>Transform</summary><pre id="transform"></pre></details><details id="diagnostic-panel"><summary>诊断 <span id="diagnostic-count">0</span></summary><pre id="diagnostics"></pre></details><p class="hint">LightTransport 风格的 RGB 路径追踪。涂层采用 Principled + coat 近似；银光谱使用 RGB 近似。原始 PBRT 参数保留在此。</p></aside></main>`;
+import { icon,tool } from './ui/icons';
+import { Explorer } from './ui/explorer';
+import { Properties } from './ui/properties';
+
 const $=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
-const licenseLink=document.createElement('a');licenseLink.href=import.meta.env.BASE_URL+'licenses/NOTICE.txt';licenseLink.textContent='开源许可';document.querySelector('header a')!.before(licenseLink);
-let generation=0,metadata:Metadata|undefined,selection:Entity|undefined,imageBytes:ArrayBuffer|undefined,packedRecords:Uint32Array|undefined;
-const renderer=new Renderer($<HTMLCanvasElement>('canvas'),(s,error=false)=>{$('status').textContent=s;$('indicator').className=error?'error':'ready';if(error){$('overlay').textContent=s;$('overlay').hidden=false;}},s=>{$('spp').textContent=s.toString();$('pause').textContent=renderer.paused?'继续':'暂停';});
+document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
+<header class="topbar">
+ <a class="brand" href="https://github.com/breeze028/pbrt-v4-parser" aria-label="PBRT Scene Lab on GitHub"><span class="brand-mark">${icon('layers')}</span><strong>PBRT <span>Scene Lab</span></strong><span class="version">0.1</span></a>
+ <div class="scene-picker"><label for="scene">SCENE</label><select id="scene"><option value="spaceship">Spaceship</option><option value="bathroom">Bathroom</option><option value="cornell-box">Cornell Box</option></select></div>
+ <nav class="mode-switch" aria-label="Workspace mode"><button id="showcase" aria-pressed="true">Showcase</button><button id="inspect" aria-pressed="false">Inspect</button></nav>
+ <a class="github-link" href="https://github.com/breeze028/pbrt-v4-parser" title="View source on GitHub">${icon('github')}<span>Source</span></a>
+</header>
+<main id="workspace" data-mode="showcase">
+ <aside id="explorer-panel" class="panel explorer-panel" aria-label="Scene Explorer" inert>
+  <div class="panel-heading"><span>${icon('layers')}Scene Explorer</span>${tool('close-explorer','Close Scene Explorer','close')}</div>
+  <div class="explorer-filters"><label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Search nodes…" aria-label="Search scene nodes" autocomplete="off"><kbd>/</kbd></label>
+   <select id="category" aria-label="Filter node category"><option>All</option><option>Camera</option><option>Geometry</option><option>Materials</option><option>Textures</option><option>Lights</option><option>Instances</option><option>Objects</option><option>Media</option><option>Render settings</option></select></div>
+  <div id="tree" class="tree-viewport"></div><div class="panel-footer"><span id="node-count">Loading structure…</span><span>Scene IR</span></div>
+  <div id="resize-left" class="resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize Scene Explorer" tabindex="0"></div>
+ </aside>
+ <section id="viewport" class="viewport" aria-label="Path tracing viewport">
+  <div class="scene-caption"><div class="eyebrow">PBRT V4 / PATH TRACING</div><h1 id="scene-title">Spaceship</h1><p id="scene-credit">Original scene · thecali · CC0</p></div>
+  <div class="viewport-actions"><button id="toggle-explorer" class="text-button inspect-only" title="Toggle Scene Explorer" aria-expanded="true">${icon('layers')}<span>Explorer</span></button><button id="toggle-properties" class="text-button inspect-only" title="Toggle Properties" aria-expanded="true">${icon('panel')}<span>Properties</span></button></div>
+  <div id="film-area" class="film-area"><canvas id="canvas" aria-label="WebGPU path tracing preview"></canvas></div>
+  <div id="overlay" class="loading-overlay" role="status"><div class="loading-mark">${icon('layers')}</div><strong id="loading-title">Preparing your scene</strong><p id="loading-message">Initializing WebGPU…</p><button id="retry" hidden>Reload application</button></div>
+  <div class="floating-toolbar" role="toolbar" aria-label="Viewport controls">
+   ${tool('reset','Reset camera','reset','R')}${tool('pause','Pause rendering','pause','Space')}${tool('restart','Restart accumulation','activity')}
+   <span class="toolbar-divider"></span>${tool('exposure-toggle','Exposure','sun')}${tool('settings-toggle','Render settings','settings')}
+   <span class="toolbar-divider"></span>${tool('fullscreen','Fullscreen','expand','F')}${tool('help-toggle','Camera controls & help','help','?')}
+  </div>
+  <section id="exposure-panel" class="popover exposure-popover" aria-label="Exposure" hidden><div class="popover-heading"><h2>Exposure</h2>${tool('close-exposure','Close exposure','close')}</div><label class="field" for="exposure"><span>Display exposure <output id="exposure-value">1.0</output></span><input id="exposure" type="range" min="0.2" max="3" step="0.1" value="1"></label><p class="muted">Adjusts the display. Linear HDR data is unchanged.</p></section>
+  <section id="settings-panel" class="popover settings-popover" aria-label="Render settings" hidden>
+   <div class="popover-heading"><div><div class="eyebrow">PATH TRACER</div><h2>Render settings</h2></div>${tool('close-settings','Close render settings','close')}</div>
+   <div class="settings-grid">
+    <label class="field">Preview resolution<select id="resolution"><option>128</option><option>256</option><option selected>384</option><option>512</option></select></label>
+    <label class="field">Target samples<input id="target-spp" type="number" min="0" max="100000" step="1" value="0"><small>0 = continuous</small></label>
+    <label class="check wide"><input id="manual-depth" type="checkbox" disabled>Override scene path depth</label>
+    <label class="field">Max depth<input id="depth" type="number" min="1" max="1024" step="1" value="8" disabled></label>
+    <label class="field">Random seed<input id="seed" type="number" min="0" max="4294967295" step="1" value="1"></label>
+    <p id="depth-info" class="muted wide">Reading scene defaults…</p>
+    <label class="check"><input id="clamp" type="checkbox" checked>Sample clamp 64/8</label><label class="check"><input id="lod0" type="checkbox">Force LOD 0</label>
+    <label class="check"><input id="enable-alpha" type="checkbox" checked>Alpha masks</label><label class="check"><input id="enable-bump" type="checkbox" checked>Bump mapping</label>
+   </div><div class="popover-footer"><button id="export-hdr" class="text-button">${icon('download')}Export HDR <span class="badge">PFM</span></button></div>
+  </section>
+  <section id="help-panel" class="popover" aria-label="Camera controls and help" hidden><div class="popover-heading"><h2>Explore the scene</h2>${tool('close-help','Close help','close')}</div><dl class="shortcuts"><dt>Orbit</dt><dd>Drag the image</dd><dt>Move</dt><dd><kbd>W A S D</kbd> · <kbd>Q E</kbd></dd><dt>Look</dt><dd>Arrow keys</dd><dt>Dolly</dt><dd>Scroll the image</dd><dt>Reset camera</dt><dd><kbd>R</kbd></dd><dt>Pause / resume</dt><dd><kbd>Space</kbd></dd><dt>Inspect / showcase</dt><dd><kbd>I</kbd></dd><dt>Fullscreen</dt><dd><kbd>F</kbd></dd></dl><p class="muted">Focus the image to move. Hold Shift for larger steps. Select scene nodes in the Explorer; viewport picking is not available.</p><a id="license-link">Open-source licenses ↗</a></section>
+ </section>
+ <aside id="properties-panel" class="panel properties-panel" aria-label="Properties Inspector" inert>
+  <div class="panel-heading"><span>Properties</span>${tool('close-properties','Close Properties','close')}</div>
+  <div class="selection-heading"><span id="selection-kind" class="eyebrow">CAMERA</span><h2 id="selection">No selection</h2></div>
+  <div class="property-tabs" role="tablist" aria-label="Property view"><button id="properties-tab" role="tab" aria-selected="true" aria-controls="property-content">Properties</button><button id="raw-tab" role="tab" aria-selected="false" aria-controls="raw-data">${icon('code')}Raw Data</button></div>
+  <div class="property-scroll"><figure id="texture-card" hidden><canvas id="texture-preview" aria-label="Texture preview"></canvas><figcaption id="texture-info"></figcaption></figure><div id="property-content" role="tabpanel" aria-labelledby="properties-tab"></div><pre id="raw-data" role="tabpanel" aria-labelledby="raw-tab" hidden></pre></div>
+  <div class="panel-footer">Read-only · Original PBRT values</div><div id="resize-right" class="resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize Properties" tabindex="0"></div>
+ </aside>
+ <section id="diagnostic-drawer" class="diagnostic-drawer" aria-label="Diagnostics" hidden><div class="drawer-heading"><div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic view"><button id="scene-log-tab" role="tab" aria-selected="true">Scene <span id="diagnostic-count" class="badge">0</span></button><button id="gpu-log-tab" role="tab" aria-selected="false">GPU checks</button><button id="activity-log-tab" role="tab" aria-selected="false">Activity</button></div><button id="validate" class="text-button">${icon('activity')}Run GPU self-test</button>${tool('close-diagnostics','Close diagnostics','close')}</div><pre id="diagnostics" role="tabpanel"></pre><pre id="gpu-checks" role="tabpanel" hidden>Not run. Run the self-test to read back actual GPU results.</pre><pre id="activity-log" role="tabpanel" hidden></pre></section>
+</main>
+<footer class="statusbar"><div class="status-primary"><i id="indicator" class="busy"></i><span id="status" role="status">Initializing WebGPU…</span></div><div class="status-metrics"><span><b id="spp">0</b> spp</span><span id="triangle-count">— triangles</span><span id="buffer-size">—</span><span id="gpu-adapter">GPU pending</span></div><button id="diagnostics-toggle" title="Toggle diagnostics" aria-expanded="false">${icon('activity')}<span>Diagnostics</span><span id="diagnostic-badge" class="badge">0</span></button></footer>`;
+
+let generation=0,metadata:Metadata|undefined,selection:Entity|undefined,imageBytes:ArrayBuffer|undefined,packedRecords:Uint32Array|undefined,loading=true;
+let mode:'showcase'|'inspect'='showcase',leftOpen=true,rightOpen=true,manualDepth:number|undefined;
+const sceneNames:Record<string,[string,string]>={'cornell-box':['Cornell Box','Original PBRT scene · CC0'],spaceship:['Spaceship','Original scene · thecali · CC0'],bathroom:['Bathroom','Original scene · Mareck · CC0']};
+const activity:string[]=[];
+function log(message:string){activity.push(message);if(activity.length>80)activity.shift();$('activity-log').textContent=activity.join('\n');}
+function status(message:string,error=false){$('status').textContent=message;$('status').title=message;$('indicator').className=error?'error':loading?'busy':'ready';if(error){$('loading-title').textContent='Unable to render this scene';$('loading-message').textContent=message;$('overlay').hidden=false;$('retry').hidden=false;log(message);}}
+function pauseLabel(paused:boolean){if($('pause').getAttribute('aria-label')===(paused?'Resume rendering':'Pause rendering'))return;$('pause').innerHTML=icon(paused?'play':'pause');$('pause').setAttribute('aria-label',paused?'Resume rendering':'Pause rendering');$('pause').title=(paused?'Resume rendering':'Pause rendering')+' (Space)';}
+const renderer=new Renderer($<HTMLCanvasElement>('canvas'),status,s=>{$('spp').textContent=s.toLocaleString();pauseLabel(renderer.paused);if(renderer.paused&&renderer.maxSpp>0&&s>=renderer.maxSpp)status(`Target reached · ${renderer.maxSpp} spp`);});
 const worker=new Worker(new URL('./worker/load.ts',import.meta.url),{type:'module'});
-function inspect(entity:Entity,label:string){
- selection=entity;$('selection').textContent=label;$('parameters').textContent=JSON.stringify({type:entity.type,source:entity.source,line:entity.line,parameters:entity.parameters,attributes:entity.inheritedParameters,references:entity.references,resources:entity.resources,material:entity.material,areaLight:entity.areaLight,reverseOrientation:entity.reverseOrientation},null,2);$('transform').textContent=JSON.stringify({start:entity.transform,end:entity.endTransform},null,2);$('texture-card').hidden=true;
- const index=metadata?.textures.indexOf(entity)??-1;
- if(index>=0 && packedRecords && imageBytes){const slot=packedRecords[packedRecords[8]+index*8],image=metadata!.images[slot];if(image){
-  const level=image.levels[0],canvas=$<HTMLCanvasElement>('texture-preview');canvas.width=level.width;canvas.height=level.height;
-  canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(imageBytes.slice(level.offset,level.offset+level.bytes)),level.width,level.height),0,0);
-  $('texture-info').textContent=`${image.path}\n${level.width} × ${level.height} · ${image.levels.length} mip levels\n${image.role} · ${image.srgb?'sRGB color':'linear data'}`;$('texture-card').hidden=false;
- }}
+const properties=new Properties($('property-content'),$('raw-data'),$('selection'),$('selection-kind'),$<HTMLCanvasElement>('texture-preview'),$('texture-info'));
+const explorer=new Explorer($('tree'),$('node-count'),(item,fromUser)=>{if(!metadata)return;selection=item.entity;properties.select(item,metadata,packedRecords,imageBytes);if(fromUser&&mode==='inspect'&&window.innerWidth<1440){rightOpen=true;leftOpen=false;updatePanels();}});
+$('license-link').setAttribute('href',import.meta.env.BASE_URL+'licenses/NOTICE.txt');
+
+function updatePanels(){
+ const workspace=$('workspace');workspace.dataset.mode=mode;workspace.classList.toggle('left-closed',!leftOpen);workspace.classList.toggle('right-closed',!rightOpen);
+ $('explorer-panel').inert=mode!=='inspect'||!leftOpen;$('properties-panel').inert=mode!=='inspect'||!rightOpen;
+ $('toggle-explorer').setAttribute('aria-expanded',String(leftOpen));$('toggle-properties').setAttribute('aria-expanded',String(rightOpen));
+ $('showcase').setAttribute('aria-pressed',String(mode==='showcase'));$('inspect').setAttribute('aria-pressed',String(mode==='inspect'));
 }
-function group(title:string,items:Entity[]){const details=document.createElement('details');details.open=title==='Geometry';const summary=document.createElement('summary');summary.textContent=title+' · '+items.length;details.append(summary);items.forEach((e,i)=>{const b=document.createElement('button');b.className='tree-item';b.textContent=e.name||`${e.type} ${i}`;b.onclick=()=>{document.querySelectorAll('.tree-item').forEach(x=>x.classList.remove('active'));b.classList.add('active');inspect(e,b.textContent!);};details.append(b);});$('tree').append(details);}
-function hierarchy(title:string,items:unknown[]){const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent=title+' · '+items.length;details.append(summary);items.forEach((item,i)=>{const b=document.createElement('button');b.className='tree-item';b.textContent=String((item as {name?:string}).name||i);b.onclick=()=>{$('selection').textContent=title+' · '+b.textContent;$('parameters').textContent=JSON.stringify(item,null,2);$('transform').textContent=JSON.stringify((item as {transform?:number[]}).transform??{},null,2);$('texture-card').hidden=true;};details.append(b);});$('tree').append(details);}
-function show(meta:Metadata){
- metadata=meta;$('tree').replaceChildren();group('Camera',[meta.camera]);group('Render settings',[meta.film,meta.sampler,meta.integrator,meta.pixelFilter,meta.accelerator]);group('Geometry',meta.shapes);hierarchy('Objects',meta.objects);hierarchy('Instances',meta.instances);group('Materials',meta.materials);group('Textures',meta.textures);group('Lights',[...meta.lights,...meta.areaLights]);group('Media',meta.media);
- $('shape-count').textContent=String(meta.counts.shapes);$('summary').textContent=`${meta.counts.triangles.toLocaleString()} triangles\n${meta.counts.placements} placements · ${meta.counts.nodes} BVH nodes\n${meta.materials.length} materials · ${meta.textures.length} textures`;
- $('diagnostic-count').textContent=String(meta.diagnostics.length);$('diagnostics').textContent=meta.diagnostics.map(d=>`${d.severity} [${d.code}] ${d.message}\n${d.source}:${d.line}`).join('\n\n')||'无解析或适配诊断';inspect(meta.camera,'Camera · '+meta.camera.type);
+function setMode(value:'showcase'|'inspect'){mode=value;closePopovers();if(value==='inspect'){leftOpen=true;rightOpen=window.innerWidth>=1440;}updatePanels();}
+$('showcase').onclick=()=>setMode('showcase');$('inspect').onclick=()=>setMode('inspect');
+$('toggle-explorer').onclick=()=>{leftOpen=!leftOpen;if(leftOpen&&window.innerWidth<1100)rightOpen=false;updatePanels();};
+$('toggle-properties').onclick=()=>{rightOpen=!rightOpen;if(rightOpen&&window.innerWidth<1100)leftOpen=false;updatePanels();};
+$('close-explorer').onclick=()=>{leftOpen=false;updatePanels();$('toggle-explorer').focus();};$('close-properties').onclick=()=>{rightOpen=false;updatePanels();$('toggle-properties').focus();};
+function filter(){explorer.filter($<HTMLInputElement>('search').value,$<HTMLSelectElement>('category').value);}
+$('search').oninput=filter;$('category').onchange=filter;
+for(const raw of [false,true]){const id=raw?'raw-tab':'properties-tab';$(id).onclick=()=>{properties.setRaw(raw);$('raw-tab').setAttribute('aria-selected',String(raw));$('properties-tab').setAttribute('aria-selected',String(!raw));};}
+for(const ids of [['properties-tab','raw-tab'],['scene-log-tab','gpu-log-tab','activity-log-tab']])for(const [index,id] of ids.entries())$(id).onkeydown=e=>{if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const next=ids[(index+(e.key==='ArrowRight'?1:ids.length-1))%ids.length];$(next).click();$(next).focus();}};
+function closePopovers(){for(const id of ['settings','exposure','help']){$(id+'-panel').hidden=true;$(id+'-toggle').setAttribute('aria-expanded','false');}}
+for(const id of ['settings','exposure','help']){
+ $(id+'-toggle').setAttribute('aria-expanded','false');$(id+'-toggle').setAttribute('aria-controls',id+'-panel');
+ $(id+'-toggle').onclick=()=>{const opening=$(id+'-panel').hidden;closePopovers();$(id+'-panel').hidden=!opening;$(id+'-toggle').setAttribute('aria-expanded',String(opening));if(opening){if(window.innerWidth<1440){rightOpen=false;if(window.innerWidth<1100)leftOpen=false;updatePanels();}const h=$(id+'-panel').querySelector('h2')!;h.tabIndex=-1;h.focus();}};
+ $('close-'+id).onclick=()=>{closePopovers();$(id+'-toggle').focus();};
 }
+document.addEventListener('pointerdown',e=>{if(!(e.target as HTMLElement).closest('.popover,.floating-toolbar'))closePopovers();});
+function drawer(open:boolean){$('diagnostic-drawer').hidden=!open;$('workspace').classList.toggle('drawer-open',open);$('diagnostics-toggle').setAttribute('aria-expanded',String(open));}
+$('diagnostics-toggle').onclick=()=>drawer(Boolean($('diagnostic-drawer').hidden));$('close-diagnostics').onclick=()=>{drawer(false);$('diagnostics-toggle').focus();};
+for(const [index,id] of ['scene-log-tab','gpu-log-tab','activity-log-tab'].entries())$(id).onclick=()=>{['diagnostics','gpu-checks','activity-log'].forEach((panel,i)=>{$(panel).hidden=i!==index;});['scene-log-tab','gpu-log-tab','activity-log-tab'].forEach((tab,i)=>$(tab).setAttribute('aria-selected',String(i===index)));};
+
+// Display fit is independent of sampling resolution. UI-only resizing keeps the
+// Film aspect and the existing GPU backbuffer; only the resolution control allocates pixels.
+function fitFilm(){const area=$('film-area');if(!metadata||!area.clientWidth||!area.clientHeight)return;const aspect=metadata.width/metadata.height;const width=Math.min(area.clientWidth,area.clientHeight*aspect),height=width/aspect;canvas.style.width=width+'px';canvas.style.height=height+'px';$('buffer-size').textContent=`${renderer.width} × ${renderer.height}`;}
+const canvas=$<HTMLCanvasElement>('canvas');canvas.tabIndex=0;new ResizeObserver(fitFilm).observe($('film-area'));
+function resizable(id:string,side:'left'|'right'){
+ const handle=$(id),variable=side==='left'?'--explorer-width':'--properties-width';
+ const set=(width:number)=>{const clamped=Math.max(220,Math.min(380,window.innerWidth*.33,width));$('workspace').style.setProperty(variable,clamped+'px');handle.setAttribute('aria-valuenow',String(Math.round(clamped)));};
+ handle.setAttribute('aria-valuemin','220');handle.setAttribute('aria-valuemax','380');handle.setAttribute('aria-valuenow',side==='left'?'248':'300');
+ handle.onpointerdown=e=>{const x=e.clientX,width=$(side==='left'?'explorer-panel':'properties-panel').getBoundingClientRect().width;handle.setPointerCapture(e.pointerId);handle.onpointermove=move=>set(width+(move.clientX-x)*(side==='left'?1:-1));};handle.onpointerup=handle.onpointercancel=()=>{handle.onpointermove=null;};
+ handle.onkeydown=e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();set($(side==='left'?'explorer-panel':'properties-panel').getBoundingClientRect().width+(e.key==='ArrowRight'?16:-16)*(side==='left'?1:-1));}};
+}
+resizable('resize-left','left');resizable('resize-right','right');
+window.addEventListener('resize',()=>{if(window.innerWidth<1100&&leftOpen&&rightOpen)rightOpen=false;updatePanels();fitFilm();});
+
+function applyDepth(reset=true){if(!metadata)return;const manual=$<HTMLInputElement>('manual-depth');manual.disabled=loading;if(manual.checked&&manualDepth===undefined)manualDepth=metadata.maxDepth;renderer.depth=manual.checked?manualDepth!:metadata.maxDepth;const input=$<HTMLInputElement>('depth');input.disabled=loading||!manual.checked;input.value=String(renderer.depth);$('depth-info').textContent=`Scene default: ${metadata.maxDepth} · Active: ${renderer.depth}${manual.checked?' (override)':''}`;if(reset)renderer.reset();}
 let gpuError:unknown;
-const ready=renderer.init().then(()=>{$('gpu-adapter').textContent=renderer.gpuName;}).catch(e=>{gpuError=e;$('status').textContent=String(e);$('overlay').textContent=String(e);$('indicator').className='error';});
-worker.onmessage=async ({data}:{data:Loaded|{type:string;generation:number;message:string}})=>{
+const ready=renderer.init().then(()=>{$('gpu-adapter').textContent=renderer.gpuName;$('gpu-adapter').title=renderer.gpuName;log('WebGPU adapter: '+renderer.gpuName);}).catch(e=>{gpuError=e;status(String(e),true);});
+worker.onmessage=async({data}:{data:Loaded|{type:string;generation:number;message:string}})=>{
  if(data.generation!==generation)return;
- if(data.type==='progress'){$('overlay').textContent=(data as {message:string}).message;return;}
- if(data.type==='error'){$('status').textContent=(data as {message:string}).message;$('overlay').textContent=(data as {message:string}).message;return;}
- const loaded=data as Loaded;imageBytes=loaded.buffers[4];packedRecords=new Uint32Array(loaded.buffers[3]);show(loaded.metadata);$('load-time').textContent=`WASM 加载 ${(loaded.milliseconds/1000).toFixed(2)} s`;
- try{await ready;if(gpuError)throw gpuError;if(loaded.generation!==generation)return;await renderer.load(loaded.metadata,loaded.buffers);applyDepth(false);$('overlay').hidden=loaded.metadata.renderable;}catch(e){renderer.disposeScene();$('status').textContent=String(e);$('indicator').className='error';$('overlay').textContent=String(e);$('overlay').hidden=false;}
+ if(data.type==='progress'){$('loading-message').textContent=(data as {message:string}).message;return;}
+ if(data.type==='error'){loading=false;status((data as {message:string}).message,true);return;}
+ const loaded=data as Loaded;
+ try{
+  await ready;if(gpuError)throw gpuError;if(loaded.generation!==generation)return;
+  metadata=loaded.metadata;imageBytes=loaded.buffers[4];packedRecords=new Uint32Array(loaded.buffers[3]);
+  await renderer.load(metadata,loaded.buffers);if(loaded.generation!==generation)return;
+  loading=false;applyDepth(false);fitFilm();explorer.load(metadata);
+  $('triangle-count').textContent=`${metadata.counts.triangles.toLocaleString()} triangles`;
+  const count=metadata.diagnostics.length;$('diagnostic-count').textContent=String(count);$('diagnostic-badge').textContent=String(count);
+  $('diagnostics').textContent=metadata.diagnostics.map(d=>`${d.severity.toUpperCase()} [${d.code}] ${d.message}\n${d.source}:${d.line}`).join('\n\n')||'No parser or scene adaptation diagnostics.';
+  log(`${sceneNames[$<HTMLSelectElement>('scene').value][0]} loaded in ${(loaded.milliseconds/1000).toFixed(2)} s · ${metadata.counts.triangles.toLocaleString()} triangles · ${metadata.counts.placements} placements`);
+  if(metadata.renderable){$('overlay').hidden=true;status('Rendering');}else status('This scene requires unsupported rendering features. See Diagnostics.',true);
+ }catch(e){loading=false;renderer.disposeScene();status(String(e),true);}
 };
-function load(){$<HTMLInputElement>('manual-depth').disabled=true;$<HTMLInputElement>('depth').disabled=true;$('depth-info').textContent='正在读取场景深度…';generation++;renderer.disposeScene();imageBytes=undefined;packedRecords=undefined;$('texture-card').hidden=true;$('gpu-checks').textContent='尚未运行';$('overlay').hidden=false;$('overlay').textContent='正在读取场景包…';worker.postMessage({generation,scene:$<HTMLSelectElement>('scene').value,base:new URL(import.meta.env.BASE_URL,location.origin).href});}
-$<HTMLSelectElement>('scene').onchange=load;
-$('reset').onclick=()=>{if(metadata){renderer.camera=[...metadata.camera.transform];renderer.reset();}};
-$('restart').onclick=()=>{renderer.paused=false;renderer.reset();};$('pause').onclick=()=>{renderer.paused=!renderer.paused;if(!renderer.paused && renderer.maxSpp && renderer.sample>=renderer.maxSpp){renderer.maxSpp=0;$<HTMLInputElement>('target-spp').value='0';}$('pause').textContent=renderer.paused?'继续':'暂停';};
-const validate=document.createElement('button');validate.textContent='GPU 自检';document.querySelector('.toolbar')!.append(validate);
-validate.onclick=async()=>{validate.disabled=true;const current=generation;try{const n=await renderer.validate();if(current!==generation)return;$('status').textContent=`GPU 自检通过 · ray ${n.rays}/${n.rays} · BSDF ${n.bsdf.checked} · tex ${n.textures.texels}`;$('gpu-checks').textContent=JSON.stringify(n,null,2);console.info('GPU checks',n);}catch(e){if(current===generation){$('status').textContent=String(e);$('indicator').className='error';}}finally{validate.disabled=false;}};
-const checks=document.createElement('details');checks.innerHTML='<summary>GPU 自检结果</summary><pre id="gpu-checks">尚未运行</pre>';document.querySelector('.right')!.append(checks);
-const settings=document.createElement('details');settings.className='settings';settings.innerHTML='<summary>渲染设置与 HDR 导出</summary><div class="settings-grid"><label>目标 spp（0 = 持续）<input id="target-spp" type="number" min="0" max="100000" value="0"></label><label>随机种子<input id="seed" type="number" min="0" max="4294967295" value="1"></label><label class="clamp"><input id="lod0" type="checkbox">强制 LOD 0</label><button id="export-hdr">导出线性 HDR（PFM）</button></div>';document.querySelector('.footer-note')!.after(settings);
-const adapterInfo=document.createElement('p');adapterInfo.id='gpu-adapter';adapterInfo.className='hint';settings.after(adapterInfo);
-$<HTMLInputElement>('target-spp').oninput=e=>{renderer.maxSpp=Math.max(0,Math.min(100000,Math.floor(Number((e.target as HTMLInputElement).value)||0)));};
-const depthControls=document.createElement('div');depthControls.className='depth-controls';depthControls.innerHTML='<label class="clamp"><input id="manual-depth" type="checkbox" disabled>手动控制路径深度</label><label for="depth">最大深度（max_depth）</label><input id="depth" type="number" min="1" max="1024" step="1" value="8" disabled><span id="depth-info" class="hint" aria-live="polite">正在读取场景深度…</span>';document.querySelector('.render-controls')!.after(depthControls);
-let manualDepth:number|undefined;
-function applyDepth(reset=true){
- if(!metadata)return;
- const manual=$<HTMLInputElement>('manual-depth');manual.disabled=false;
- if(manual.checked && manualDepth===undefined)manualDepth=metadata.maxDepth;
- renderer.depth=manual.checked?manualDepth!:metadata.maxDepth;
- const input=$<HTMLInputElement>('depth');input.disabled=!manual.checked;input.value=String(renderer.depth);
- $('depth-info').textContent=`场景默认：${metadata.maxDepth} · 当前：${renderer.depth}${manual.checked?'（手动）':'（跟随场景）'}`;
- if(reset)renderer.reset();
+function load(){
+ generation++;loading=true;renderer.disposeScene();metadata=undefined;selection=undefined;imageBytes=undefined;packedRecords=undefined;properties.clear();explorer.clear();
+ const name=$<HTMLSelectElement>('scene').value;[$('scene-title').textContent,$('scene-credit').textContent]=sceneNames[name];
+ $('overlay').hidden=false;$('loading-title').textContent='Preparing '+sceneNames[name][0];$('loading-message').textContent='Reading the original PBRT resources…';$('retry').hidden=true;
+ $('gpu-checks').textContent='Not run for this scene.';$('diagnostics').textContent='Loading scene…';$('triangle-count').textContent='— triangles';$('diagnostic-count').textContent=$('diagnostic-badge').textContent='0';
+ $<HTMLInputElement>('manual-depth').disabled=true;$<HTMLInputElement>('depth').disabled=true;$('depth-info').textContent='Reading scene defaults…';status('Loading scene');log('Loading '+sceneNames[name][0]);
+ worker.postMessage({generation,scene:name,base:new URL(import.meta.env.BASE_URL,location.origin).href});
 }
-$<HTMLInputElement>('manual-depth').onchange=()=>applyDepth();
-$<HTMLInputElement>('depth').oninput=e=>{const value=(e.target as HTMLInputElement).valueAsNumber;if(!Number.isFinite(value))return;manualDepth=Math.max(1,Math.min(1024,Math.floor(value)));applyDepth();};
-$<HTMLInputElement>('depth').onchange=()=>applyDepth(false);
-$<HTMLInputElement>('seed').oninput=e=>{renderer.seed=Number((e.target as HTMLInputElement).value)>>>0;renderer.reset();};
-$<HTMLInputElement>('lod0').onchange=e=>{renderer.lod0=(e.target as HTMLInputElement).checked;renderer.reset();};
-for(const [id,label] of [['enable-alpha','透明遮罩'],['enable-bump','Bump']]){const wrap=document.createElement('label');wrap.className='clamp';wrap.innerHTML=`<input id="${id}" type="checkbox" checked>${label}`;document.querySelector('.settings-grid')!.append(wrap);}
-$<HTMLInputElement>('enable-alpha').onchange=e=>{renderer.alpha=(e.target as HTMLInputElement).checked;renderer.reset();};
-$<HTMLInputElement>('enable-bump').onchange=e=>{renderer.bump=(e.target as HTMLInputElement).checked;renderer.reset();};
-$('export-hdr').onclick=async()=>{try{const hdr=await renderer.readHdr();const header=new TextEncoder().encode(`PF\n${hdr.width} ${hdr.height}\n-1.0\n`);const url=URL.createObjectURL(new Blob([header,hdr.rgb.buffer],{type:'application/octet-stream'}));const a=document.createElement('a');a.href=url;a.download=$<HTMLSelectElement>('scene').value+`-${hdr.spp}spp.pfm`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){$('status').textContent=String(e);}};
-const retry=document.createElement('button');retry.textContent='重新初始化';retry.title='重新加载页面，重建 Worker 和 GPU 资源';retry.onclick=()=>location.reload();document.querySelector('.toolbar')!.append(retry);
-$<HTMLInputElement>('exposure').oninput=e=>{renderer.exposure=Number((e.target as HTMLInputElement).value);$('exposure-value').textContent=renderer.exposure.toFixed(1);};
-$<HTMLSelectElement>('resolution').onchange=e=>renderer.resize(Number((e.target as HTMLSelectElement).value));
-$<HTMLInputElement>('clamp').onchange=e=>{renderer.clamp=(e.target as HTMLInputElement).checked;renderer.reset();};
-let drag:{x:number;y:number}|undefined;const canvas=$<HTMLCanvasElement>('canvas');canvas.tabIndex=0;canvas.onpointerdown=e=>{canvas.focus();drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};canvas.onpointerup=()=>{drag=undefined;};canvas.onpointercancel=()=>{drag=undefined;};canvas.onpointermove=e=>{if(drag){renderer.orbit(e.clientX-drag.x,e.clientY-drag.y);drag={x:e.clientX,y:e.clientY};}};
+$('scene').onchange=load;$('retry').onclick=()=>location.reload();
+$('reset').onclick=()=>{if(metadata){renderer.camera=[...metadata.camera.transform];renderer.reset();status('Camera reset');}};
+$('restart').onclick=()=>{if(metadata){renderer.reset();status('Accumulation restarted');}};
+$('pause').onclick=()=>{renderer.paused=!renderer.paused;if(!renderer.paused&&renderer.maxSpp&&renderer.sample>=renderer.maxSpp){renderer.maxSpp=0;$<HTMLInputElement>('target-spp').value='0';}pauseLabel(renderer.paused);status(renderer.paused?'Paused':'Rendering');};
+$('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await $('app').requestFullscreen();}catch(e){log(String(e));status('Fullscreen is unavailable in this browser.');}};
+document.addEventListener('fullscreenchange',()=>{$('fullscreen').setAttribute('aria-label',document.fullscreenElement?'Exit fullscreen':'Fullscreen');fitFilm();});
+$('manual-depth').onchange=()=>applyDepth();$('depth').oninput=e=>{const value=(e.target as HTMLInputElement).valueAsNumber;if(!Number.isFinite(value))return;manualDepth=Math.max(1,Math.min(1024,Math.floor(value)));applyDepth();};$('depth').onchange=()=>applyDepth(false);
+$('target-spp').oninput=e=>{renderer.maxSpp=Math.max(0,Math.min(100000,Math.floor(Number((e.target as HTMLInputElement).value)||0)));};
+$('seed').oninput=e=>{renderer.seed=Number((e.target as HTMLInputElement).value)>>>0;renderer.reset();};
+for(const [id,key] of [['clamp','clamp'],['lod0','lod0'],['enable-alpha','alpha'],['enable-bump','bump']] as const)$(id).onchange=e=>{renderer[key]=(e.target as HTMLInputElement).checked;renderer.reset();};
+$('exposure').oninput=e=>{renderer.exposure=Number((e.target as HTMLInputElement).value);$('exposure-value').textContent=renderer.exposure.toFixed(1);};
+$('resolution').onchange=e=>{renderer.resize(Number((e.target as HTMLSelectElement).value));fitFilm();};
+$('export-hdr').onclick=async()=>{try{const hdr=await renderer.readHdr(),header=new TextEncoder().encode(`PF\n${hdr.width} ${hdr.height}\n-1.0\n`),url=URL.createObjectURL(new Blob([header,hdr.rgb.buffer],{type:'application/octet-stream'})),a=document.createElement('a');a.href=url;a.download=$<HTMLSelectElement>('scene').value+`-${hdr.spp}spp.pfm`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);log('Exported linear HDR · '+hdr.spp+' spp');}catch(e){log(String(e));status(String(e));}};
+$('validate').onclick=async()=>{const button=$<HTMLButtonElement>('validate');button.disabled=true;const current=generation;try{const n=await renderer.validate();if(current!==generation)return;$('gpu-checks').textContent=JSON.stringify(n,null,2);status(`GPU self-test passed · ${n.rays} rays · ${n.bsdf.checked.toLocaleString()} BSDF · ${n.textures.texels} texture samples`);log('GPU self-test passed');console.info('GPU checks',n);}catch(e){if(current===generation){$('gpu-checks').textContent=String(e);status(String(e),true);}}finally{button.disabled=false;}};
+let drag:{x:number;y:number}|undefined;
+canvas.onpointerdown=e=>{canvas.focus();drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);};canvas.onpointerup=canvas.onpointercancel=()=>{drag=undefined;};canvas.onpointermove=e=>{if(drag){renderer.orbit(e.clientX-drag.x,e.clientY-drag.y);drag={x:e.clientX,y:e.clientY};}};
 canvas.onwheel=e=>{e.preventDefault();renderer.move(0,0,Math.max(-.5,Math.min(.5,-e.deltaY*.002)));};
-canvas.onkeydown=e=>{const step=e.shiftKey?.45:.15;const action:Record<string,()=>void>={w:()=>renderer.move(0,0,step),s:()=>renderer.move(0,0,-step),a:()=>renderer.move(-step,0,0),d:()=>renderer.move(step,0,0),q:()=>renderer.move(0,-step,0),e:()=>renderer.move(0,step,0),arrowleft:()=>renderer.look(-.035,0),arrowright:()=>renderer.look(.035,0),arrowup:()=>renderer.look(0,.035),arrowdown:()=>renderer.look(0,-.035)};const run=action[e.key.toLowerCase()];if(run){e.preventDefault();run();}};
-window.addEventListener('pagehide',()=>{worker.terminate();renderer.destroy();});
-window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
-// Read-only QA snapshots; no renderer side effects are triggered through this object.
-Object.defineProperty(window,'pbrtLab',{get:()=>({generation,metadata,selection,spp:renderer.sample,failed:renderer.failed,paused:renderer.paused})});
-load();
+canvas.onkeydown=e=>{const step=e.shiftKey?.45:.15;const actions:Record<string,()=>void>={w:()=>renderer.move(0,0,step),s:()=>renderer.move(0,0,-step),a:()=>renderer.move(-step,0,0),d:()=>renderer.move(step,0,0),q:()=>renderer.move(0,-step,0),e:()=>renderer.move(0,step,0),arrowleft:()=>renderer.look(-.035,0),arrowright:()=>renderer.look(.035,0),arrowup:()=>renderer.look(0,.035),arrowdown:()=>renderer.look(0,-.035)};const run=actions[e.key.toLowerCase()];if(run){e.preventDefault();run();}};
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'){const open=['settings','exposure','help'].find(id=>!$(id+'-panel').hidden);closePopovers();if(open)$(open+'-toggle').focus();drawer(false);if(window.innerWidth<1440){rightOpen=false;if(window.innerWidth<1100)leftOpen=false;updatePanels();}return;}
+ if(e.target instanceof HTMLInputElement||e.target instanceof HTMLSelectElement||e.target instanceof HTMLTextAreaElement||e.ctrlKey||e.metaKey||e.altKey)return;
+ const key=e.key.toLowerCase();if(key==='i'){e.preventDefault();setMode(mode==='showcase'?'inspect':'showcase');}if(key==='r'){e.preventDefault();$('reset').click();}if(key==='f'){e.preventDefault();$('fullscreen').click();}if(key===' '&&!(e.target instanceof HTMLButtonElement)){e.preventDefault();$('pause').click();}if(key==='?')$('help-toggle').click();if(key==='/'){e.preventDefault();if(mode!=='inspect')setMode('inspect');leftOpen=true;updatePanels();$('search').focus();}
+});
+window.addEventListener('pagehide',()=>{worker.terminate();renderer.destroy();});window.addEventListener('pageshow',e=>{if(e.persisted)location.reload();});
+Object.defineProperty(window,'pbrtLab',{get:()=>({generation,metadata,selection,spp:renderer.sample,failed:renderer.failed,paused:renderer.paused,depth:renderer.depth,mode})});
+updatePanels();load();

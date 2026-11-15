@@ -17,11 +17,11 @@ export class Renderer {
   gpuName='';
   constructor(private canvas:HTMLCanvasElement,private status:(s:string,error?:boolean)=>void,private stats:(s:number)=>void){}
   async init(){
-    if(!isSecureContext || !navigator.gpu)throw Error('此浏览器未提供 WebGPU；需要 HTTPS / localhost 与硬件加速。');
-    const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});if(!adapter)throw Error('无法获得 WebGPU Adapter。');
+    if(!isSecureContext || !navigator.gpu)throw Error('WebGPU is unavailable. Use HTTPS or localhost with hardware acceleration enabled.');
+    const adapter=await navigator.gpu.requestAdapter({powerPreference:'high-performance'});if(!adapter)throw Error('No WebGPU adapter is available.');
     this.gpuName=adapter.info.description||[adapter.info.vendor,adapter.info.architecture].filter(Boolean).join(' ');
     this.device=await adapter.requestDevice();this.context=this.canvas.getContext('webgpu')!;
-    if(!this.context)throw Error('无法创建 WebGPU Canvas');
+    if(!this.context)throw Error('Unable to create a WebGPU canvas.');
     this.context.configure({device:this.device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});
     this.device.addEventListener('uncapturederror',e=>{this.failed=true;this.status(e.error.message,true);console.error(e.error);});
     void this.device.lost.then(info=>{this.failed=true;this.status('GPU device lost: '+info.message,true);});
@@ -48,7 +48,7 @@ export class Renderer {
   async load(metadata:Metadata,buffers:ArrayBuffer[]){
     this.serial++;this.disposeScene();this.metadata=metadata;this.camera=[...metadata.camera.transform];this.depth=metadata.maxDepth;this.failed=false;
     if(metadata.layoutVersion!==2)throw Error('GPU layout version mismatch');
-    if(!metadata.renderable){this.status('场景已解析；此版本尚未实现它需要的渲染特性。',true);return;}
+    if(!metadata.renderable){this.status('Scene parsed, but some required rendering features are unsupported.',true);return;}
     const scene=buffers.slice(0,4).map((b,i)=>this.buffer(b,'Scene buffer '+i));this.sceneGPU=scene;this.sceneBytes=buffers;this.diagnostics=this.device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});this.owned.push(this.diagnostics);
     this.uploadImages(metadata,buffers[4]);
     this.resize(this.previewSize);
@@ -85,19 +85,19 @@ export class Renderer {
   }
   reset(){this.paused=false;this.sample=0;this.stats(0);if(this.owned.includes(this.accumulation)){const encoder=this.device.createCommandEncoder();encoder.clearBuffer(this.accumulation);this.device.queue.submit([encoder.finish()]);}}
   async readHdr(){
-    if(!this.metadata?.renderable || this.failed || !this.sample)throw Error('先完成至少一个有效样本');
+    if(!this.metadata?.renderable || this.failed || !this.sample)throw Error('Render at least one valid sample before exporting.');
     const serial=this.serial,width=this.width,height=this.height;
     const buffer=this.device.createBuffer({size:width*height*16,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
     try{
       const encoder=this.device.createCommandEncoder();encoder.copyBufferToBuffer(this.accumulation,0,buffer,0,width*height*16);this.device.queue.submit([encoder.finish()]);await buffer.mapAsync(GPUMapMode.READ);
-      if(serial!==this.serial)throw Error('导出期间场景发生变化');
+      if(serial!==this.serial)throw Error('The scene changed during export. Please try again.');
       const pixels=new Float32Array(buffer.getMappedRange()),rgb=new Float32Array(width*height*3);let spp=0;
-      for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4,n=pixels[i+3];spp=Math.max(spp,n);if(!n)throw Error('不完整的累积帧');for(let c=0;c<3;c++){const v=pixels[i+c]/n;if(!Number.isFinite(v))throw Error('HDR 含非有限值');rgb[((height-1-y)*width+x)*3+c]=v;}}
+      for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4,n=pixels[i+3];spp=Math.max(spp,n);if(!n)throw Error('The accumulation frame is incomplete.');for(let c=0;c<3;c++){const v=pixels[i+c]/n;if(!Number.isFinite(v))throw Error('The HDR output contains nonfinite values.');rgb[((height-1-y)*width+x)*3+c]=v;}}
       return {width,height,spp,rgb};
     }finally{buffer.destroy();}
   }
   async validate(){
-    if(!this.metadata?.renderable)throw Error('先加载可渲染场景');
+    if(!this.metadata?.renderable)throw Error('Load a renderable scene first.');
     const serial=this.serial;
     const cpuWorker=new Worker(new URL('./probe-worker.ts',import.meta.url),{type:'module'});
     const result=await new Promise<ReturnType<typeof probes>>((resolve,reject)=>{
@@ -105,7 +105,7 @@ export class Renderer {
       cpuWorker.onerror=e=>{cpuWorker.terminate();reject(Error(e.message));};
       cpuWorker.postMessage({buffers:this.sceneBytes.slice(0,4),camera:this.camera});
     });
-    if(serial!==this.serial)throw Error('自检期间场景发生变化，请重新运行');
+    if(serial!==this.serial)throw Error('The scene changed during the self-test. Please run it again.');
     const {input,expected}=result,size=input.byteLength,scene=this.sceneGPU;
     const buffer=this.device.createBuffer({size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|GPUBufferUsage.COPY_SRC});
     const readback=this.device.createBuffer({size:size+16,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
@@ -115,8 +115,8 @@ export class Renderer {
       const group=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],buffer,diagnostic].map((b,binding)=>({binding,resource:{buffer:b}}))});
       const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.probePipeline);pass.setBindGroup(0,group);pass.setBindGroup(1,this.textureGroup!);pass.dispatchWorkgroups(Math.ceil(expected.length/64));pass.end();encoder.copyBufferToBuffer(buffer,0,readback,0,size);encoder.copyBufferToBuffer(this.diagnostics,0,readback,size,16);this.device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
       const mapped=readback.getMappedRange(),f=new Float32Array(mapped),u=new Uint32Array(mapped);let checked=0;
-      if(serial!==this.serial)throw Error('自检期间场景发生变化，请重新运行');
-      const diagnostics=[...new Uint32Array(mapped,size,4)];if(diagnostics.some(v=>v))throw Error('GPU 累积诊断失败：'+JSON.stringify(diagnostics));
+      if(serial!==this.serial)throw Error('The scene changed during the self-test. Please run it again.');
+      const diagnostics=[...new Uint32Array(mapped,size,4)];if(diagnostics.some(v=>v))throw Error('GPU accumulation diagnostics failed: '+JSON.stringify(diagnostics));
       expected.forEach((e,i)=>{const p=i*16;if(u[p+6] || Boolean(u[p+5])!==e.valid || (e.valid&&(Math.abs(f[p]-e.distance)>1e-3 || Math.abs(f[p+1]-e.u)>1e-3 || Math.abs(f[p+2]-e.v)>1e-3 || u[p+3]!==e.primitive || u[p+4]!==e.instance || e.geometric.some((v,j)=>Math.abs(v-f[p+8+j])>1e-3) || e.normal.some((v,j)=>Math.abs(v-f[p+12+j])>1e-3))))throw Error('GPU/CPU ray mismatch '+i);checked++;});
       const textureChecks=await checkTextures(this.device,textures,this.textureLayout,this.textureGroup!,this.metadata!,this.sceneBytes[4],()=>serial===this.serial);
       return {rays:checked,diagnostics,bsdf:await checkBsdf(this.device,bsdf),textures:textureChecks};
@@ -135,7 +135,7 @@ export class Renderer {
   }
   private async checkDiagnostics(){
     this.checksPending=true;const serial=this.serial;const b=this.device.createBuffer({size:16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-    try{const enc=this.device.createCommandEncoder();enc.copyBufferToBuffer(this.diagnostics,0,b,0,16);this.device.queue.submit([enc.finish()]);await b.mapAsync(GPUMapMode.READ);const counts=[...new Uint32Array(b.getMappedRange())];if(serial===this.serial && counts.some(v=>v)){this.failed=true;this.status('GPU 诊断失败：'+JSON.stringify(counts),true);}}
+    try{const enc=this.device.createCommandEncoder();enc.copyBufferToBuffer(this.diagnostics,0,b,0,16);this.device.queue.submit([enc.finish()]);await b.mapAsync(GPUMapMode.READ);const counts=[...new Uint32Array(b.getMappedRange())];if(serial===this.serial && counts.some(v=>v)){this.failed=true;this.status('GPU diagnostics failed: '+JSON.stringify(counts),true);}}
     catch(e){if(serial===this.serial){this.failed=true;this.status(String(e),true);}}finally{b.destroy();this.checksPending=false;}
   }
   orbit(dx:number,dy:number){

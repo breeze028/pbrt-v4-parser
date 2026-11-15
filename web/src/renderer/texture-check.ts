@@ -38,7 +38,7 @@ export async function checkTextures(device:GPUDevice,source:string,layout:GPUBin
   const errors=(await module.getCompilationInfo()).messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(e=>e.message).join('\n'));
   const dataLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}]});
   const pipeline=await device.createComputePipelineAsync({layout:device.createPipelineLayout({bindGroupLayouts:[dataLayout,layout]}),compute:{module,entryPoint:'main'}});
-  if(!current())throw Error('自检期间场景发生变化');
+  if(!current())throw Error('The scene changed during the self-test.');
   const storage=device.createBuffer({size:input.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
   const readback=device.createBuffer({size:input.byteLength,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
   try{

@@ -94,10 +94,10 @@ The [Bathroom and Spaceship examples](scenes/README.md) can be prepared with the
 
 The independent [WebGPU Scene Lab](web/README.md) uses the same C++ SDK → single-threaded WASM Worker → BLAS/TLAS → WGSL megakernel. **Cornell Box, Spaceship, and Bathroom have all been rendered in a real browser**, including the published Pages site. Supported features include GGX metals, rough and ideal glass, an LT-style coating approximation, TGA images and mipmaps, independent alpha masks, bump mapping, an Inspector, and linear HDR export. Geometry, material records, decoded images, and mip data are compared between native and WASM builds. The documented RGB and material approximations do not provide full PBRT equivalence. Setup instructions are in the Web README; actual evidence is in the [two-scene validation record](docs/webgpu-scenes-validation.md).
 
-![WebGPU Cornell Box preview](docs/assets/webgpu-cornell.jpg)
+![Showcase — full-film WebGPU preview](docs/assets/webgpu-ui-showcase.jpg)
 
-![Spaceship rendered on the published WebGPU site](docs/assets/webgpu-online-spaceship.jpg)
-
-![Bathroom rendered on the published WebGPU site](docs/assets/webgpu-online-bathroom.jpg)
+![Inspect — virtual Scene Explorer and structured Properties](docs/assets/webgpu-ui-inspect.jpg)
 
 The first Bathroom load downloads approximately 64.5 MB of original resources and generates mipmaps. A browser with WebGPU support is required. Scene packages exclude LightTransport `.lt` and `.ivol` files.
+
+The English UI opens in **Showcase**. Switch to **Inspect** for a searchable virtual Scene Explorer, structured Properties, on-demand Raw Data, and a diagnostics drawer. See the [UI validation record](docs/webgpu-ui-redesign.md).
