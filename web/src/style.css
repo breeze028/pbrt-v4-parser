@@ -15,3 +15,7 @@
 @media(max-width:650px){.topbar .brand{flex:1 1 calc(100% - 44px)}.topbar .github-link{margin-left:0}.scene-picker{flex:1 1 40%}}
 
 .property-row,.property-row code,.property-section>summary{font-size:11px}.parameter small{font-size:10px}
+
+/* Reserve the caption band: square Film images must not sit behind the title. */
+@media(min-width:651px){.film-area{top:104px}}
+@media(max-width:650px) and (max-height:520px){.scene-caption{top:12px}.scene-caption .eyebrow,.scene-caption p{display:none}.scene-caption h1{font-size:17px;margin-top:0}.film-area{top:45px;bottom:64px}.floating-toolbar{bottom:10px}}

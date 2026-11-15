@@ -36,6 +36,7 @@ Diagnostics is a closed-by-default bottom drawer with Scene, GPU checks and Acti
 - Paused accumulation stayed at **41 spp** with a **512×512** backbuffer when changing desktop to mobile dimensions. Mode toggles, panel resizing, searches and list navigation also preserved samples.
 - Searched and selected Bathroom `Texture02`; its `rug_mask.tga`, 1024×1024 size, 11 mip levels, float/linear role and full Raw Data were observed. Virtual-list End navigation reached the final geometry rows with approximately 24 mounted rows.
 - Manual depth **35**, scene defaults, preview resolution, seed and target **16 spp** were exercised. Automatic pause and actual `spaceship-16spp.pfm` download succeeded. Camera arrow-key input restarted accumulation. Exposure remains display-only.
+- A final screenshot review caught a square-Film overlap with the scene caption. Desktop / tablet layouts now reserve a separate caption band; narrow landscape screens use a compact caption.
 - A mobile header issue found during observation (scene selector reduced to an arrow) was corrected to an explicit two-row layout. Final selector width was approximately 212 px at a 390 px viewport.
 - Fullscreen was rejected by the embedded test browser; the English fallback was verified. Actual fullscreen display in a standalone browser is not certified here.
 
