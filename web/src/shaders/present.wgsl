@@ -7,6 +7,7 @@ struct Frame { camera:array<vec4f,4>, size:vec4u, params:vec4f, sampling:vec4f, 
 }
 @fragment fn fragment(@builtin(position) position:vec4f)->@location(0) vec4f {
   let x=min(u32(position.x),frame.size.x-1u);let y=min(u32(position.y),frame.size.y-1u);let c=accumulation[y*frame.size.x+x];
+  if(frame.features.y>0u){return vec4f(clamp(c.xyz/max(c.w,1),vec3f(0),vec3f(1)),1);}
   let linear=max(c.xyz/max(c.w,1),vec3f(0))*frame.params.y;
   return vec4f(pow(vec3f(1)-exp(-linear),vec3f(1/2.2)),1);
 }

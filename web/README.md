@@ -87,3 +87,22 @@ Worker 以 generation 丢弃旧结果，显式 close scene handle、清理 MEMFS
 来源与许可见 [THIRD_PARTY](THIRD_PARTY.md)，阶段证据见 [实施记录](../docs/webgpu-scenes-validation.md)。
 
 线上入口：[PBRT Scene Lab](https://breeze028.github.io/pbrt-v4-parser/)。原始资源通过 [scenes-v1 Release](https://github.com/breeze028/pbrt-v4-parser/releases/tag/scenes-v1) 提供；源码中不包含大型模型、生成 WASM 或 `.lt` 文件。
+
+## Optional teaching consumer API
+
+Rendering Lab imports this runtime from a pinned Git submodule. Defaults remain
+`samplingMode='mis'`, `aov=0`, `teachingDepth=false`; existing Scene Lab keeps its
+original depth/clamp conventions. Optional modes `bsdf` (NEE off) and `light`
+(NEE without MIS, suppressing non-delta sampled-emitter hits) are real estimators.
+`teachingDepth=true` includes terminal emission after the final allowed scatter,
+so BSDF/NEE/MIS target the same finite-depth transport sum in teaching comparisons.
+`aov=1..7` gives primary pixel-center albedo, world geometric/shading normal,
+t/(1+t), fract UV, placement ID, material ID. AOV display bypasses radiance tone mapping.
+
+`capturePath(x,y,sample)` deterministically replays the shared camera_sample/trace
+without consuming extra random values. Independent uniform/output/diagnostic
+buffers avoid modifying film history. It returns sample RGB, world-space vertices
+and 12 vec4 records per vertex (up to64); unused event fields remain zero.
+Reset increments the generation so asynchronous capture/exports fail if parameters
+or camera change during readback. Layout/exposure changes should not call reset.
+The detailed schema and numerical/browser evidence live in rendering-lab/docs.

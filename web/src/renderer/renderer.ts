@@ -14,7 +14,7 @@ export class Renderer {
   private raf=0;private serial=0;private checksPending=false;
   private sceneGPU:GPUBuffer[]=[];private sceneBytes:ArrayBuffer[]=[];private probePipeline!:GPUComputePipeline;
   private textureLayout!:GPUBindGroupLayout;private textureGroup?:GPUBindGroup;private imageSampler!:GPUSampler;private white!:GPUTexture;private imageTextures:GPUTexture[]=[];
-  gpuName='';
+  gpuName='';samplingMode:'mis'|'bsdf'|'light'='mis';aov=0;teachingDepth=false;private captureBuffer!:GPUBuffer;private capturePipeline!:GPUComputePipeline;
   constructor(private canvas:HTMLCanvasElement,private status:(s:string,error?:boolean)=>void,private stats:(s:number)=>void){}
   async init(){
     if(!isSecureContext || !navigator.gpu)throw Error('WebGPU is unavailable. Use HTTPS or localhost with hardware acceleration enabled.');
@@ -28,11 +28,13 @@ export class Renderer {
     const module=this.device.createShaderModule({code:shader+'\n'+bsdf+'\n'+textures+'\n'+integrator,label:'LightTransport RGB megakernel'});
     const info=await module.getCompilationInfo();const errors=info.messages.filter(m=>m.type==='error');if(errors.length)throw Error(errors.map(m=>`${m.lineNum}:${m.linePos} ${m.message}`).join('\n'));
     // An auto layout is exclusive to its pipeline; query and render share an explicit layout.
-    const group=this.device.createBindGroupLayout({entries:Array.from({length:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===0?'uniform':binding<5?'read-only-storage':'storage'} as GPUBufferBindingLayout}))});
+    const group=this.device.createBindGroupLayout({entries:Array.from({length:8},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===0?'uniform':binding<5?'read-only-storage':'storage'} as GPUBufferBindingLayout}))});
     this.textureLayout=this.device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,sampler:{type:'filtering'}},...Array.from({length:12},(_,i)=>({binding:i+1,visibility:GPUShaderStage.COMPUTE,texture:{sampleType:'float' as GPUTextureSampleType,viewDimension:'2d' as GPUTextureViewDimension}}))]});
     const layout=this.device.createPipelineLayout({bindGroupLayouts:[group,this.textureLayout]});
     this.compute=await this.device.createComputePipelineAsync({layout,compute:{module,entryPoint:'main'}});
     this.probePipeline=await this.device.createComputePipelineAsync({layout,compute:{module,entryPoint:'probe'}});
+    this.capturePipeline=await this.device.createComputePipelineAsync({layout,compute:{module,entryPoint:'capture_path'}});
+    this.captureBuffer=this.device.createBuffer({size:12304,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
     const screen=this.device.createShaderModule({code:presentation});
     this.present=await this.device.createRenderPipelineAsync({layout:'auto',vertex:{module:screen,entryPoint:'vertex'},fragment:{module:screen,entryPoint:'fragment',targets:[{format:navigator.gpu.getPreferredCanvasFormat()}]},primitive:{topology:'triangle-list'}});
     this.uniform=this.device.createBuffer({size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
@@ -80,10 +82,10 @@ export class Renderer {
     this.serial++;
     if(this.owned.includes(this.accumulation)){this.accumulation.destroy();this.owned=this.owned.filter(b=>b!==this.accumulation);}
     this.allocatePixels();const scene=this.sceneGPU;
-    this.computeGroup=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],this.accumulation,this.diagnostics].map((buffer,binding)=>({binding,resource:{buffer}}))});
+    this.computeGroup=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],this.accumulation,this.diagnostics,this.captureBuffer].map((buffer,binding)=>({binding,resource:{buffer}}))});
     this.reset();
   }
-  reset(){this.paused=false;this.sample=0;this.stats(0);if(this.owned.includes(this.accumulation)){const encoder=this.device.createCommandEncoder();encoder.clearBuffer(this.accumulation);this.device.queue.submit([encoder.finish()]);}}
+  reset(){this.serial++;this.paused=false;this.sample=0;this.stats(0);if(this.owned.includes(this.accumulation)){const encoder=this.device.createCommandEncoder();encoder.clearBuffer(this.accumulation);this.device.queue.submit([encoder.finish()]);}}
   async readHdr(){
     if(!this.metadata?.renderable || this.failed || !this.sample)throw Error('Render at least one valid sample before exporting.');
     const serial=this.serial,width=this.width,height=this.height;
@@ -112,7 +114,7 @@ export class Renderer {
     const diagnostic=this.device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE});
     try{
       this.device.queue.writeBuffer(buffer,0,input);
-      const group=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],buffer,diagnostic].map((b,binding)=>({binding,resource:{buffer:b}}))});
+      const group=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[this.uniform,scene[2],scene[0],scene[1],scene[3],buffer,diagnostic,this.captureBuffer].map((b,binding)=>({binding,resource:{buffer:b}}))});
       const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.probePipeline);pass.setBindGroup(0,group);pass.setBindGroup(1,this.textureGroup!);pass.dispatchWorkgroups(Math.ceil(expected.length/64));pass.end();encoder.copyBufferToBuffer(buffer,0,readback,0,size);encoder.copyBufferToBuffer(this.diagnostics,0,readback,size,16);this.device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
       const mapped=readback.getMappedRange(),f=new Float32Array(mapped),u=new Uint32Array(mapped);let checked=0;
       if(serial!==this.serial)throw Error('The scene changed during the self-test. Please run it again.');
@@ -122,12 +124,33 @@ export class Renderer {
       return {rays:checked,diagnostics,bsdf:await checkBsdf(this.device,bsdf),textures:textureChecks};
     }finally{buffer.destroy();readback.destroy();diagnostic.destroy();}
   }
+  private frameBytes(){
+    const bytes=new ArrayBuffer(128),f=new Float32Array(bytes),u=new Uint32Array(bytes);f.set(this.camera);u.set([this.width,this.height,this.sample,Math.max(1,Math.min(1024,this.depth))],16);
+    f.set([Math.tan(this.metadata!.fov*Math.PI/360),this.exposure,this.metadata!.filter==='triangle'?1:0,this.metadata!.filterRadius[0]],20);f.set([this.metadata!.filterRadius[1],this.lod0?1:0,0,this.clamp?1:0],24);u[26]=this.seed>>>0;
+    u[28]=(this.alpha?1:0)|(this.bump?2:0)|(this.samplingMode==='bsdf'?12:this.samplingMode==='light'?8:0)|(this.teachingDepth?16:0);u[29]=this.aov;
+    return bytes;
+  }
+  async capturePath(x:number,y:number,sample:number){
+    if(!this.computeGroup || this.failed)throw Error('Load a valid scene first.');
+    if(!Number.isInteger(sample)||sample<0||sample>0xffffff)throw Error('Invalid sample index');
+    if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=this.width||y>=this.height)throw Error('Invalid pixel');
+    const serial=this.serial,bytes=this.frameBytes(),u=new Uint32Array(bytes);u[18]=sample;u[29]=0;u[30]=x;u[31]=y;
+    const uniform=this.device.createBuffer({size:128,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    const output=this.device.createBuffer({size:12304,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
+    const readback=this.device.createBuffer({size:12304,usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
+    const diagnostic=this.device.createBuffer({size:16,usage:GPUBufferUsage.STORAGE});
+    try{
+      this.device.queue.writeBuffer(uniform,0,bytes);
+      const group=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[uniform,this.sceneGPU[2],this.sceneGPU[0],this.sceneGPU[1],this.sceneGPU[3],this.accumulation,diagnostic,output].map((buffer,binding)=>({binding,resource:{buffer}}))});
+      const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.capturePipeline);pass.setBindGroup(0,group);pass.setBindGroup(1,this.textureGroup!);pass.dispatchWorkgroups(1);pass.end();encoder.copyBufferToBuffer(output,0,readback,0,12304);this.device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
+      if(serial!==this.serial)throw Error('Scene changed during capture');
+      const data=new Float32Array(readback.getMappedRange()).slice();return {pixel:[x,y],sample,radiance:Array.from(data.slice(0,3)),vertices:Array.from({length:Math.min(64,data[3])},(_,i)=>Array.from(data.slice(4+i*48,4+(i+1)*48))),camera:[...this.camera],truncated:data[3]>=64};
+    }finally{uniform.destroy();output.destroy();readback.destroy();diagnostic.destroy();}
+  }
   private frame(){
     this.raf=requestAnimationFrame(()=>this.frame());
     if(!this.metadata?.renderable || !this.computeGroup || this.failed)return;
-    const bytes=new ArrayBuffer(128),f=new Float32Array(bytes),u=new Uint32Array(bytes);f.set(this.camera);u.set([this.width,this.height,this.sample,Math.max(1,Math.min(1024,this.depth))],16);
-    f.set([Math.tan(this.metadata.fov*Math.PI/360),this.exposure,this.metadata.filter==='triangle'?1:0,this.metadata.filterRadius[0]],20);f.set([this.metadata.filterRadius[1],this.lod0?1:0,0,this.clamp?1:0],24);u[26]=this.seed>>>0;
-    u[28]=(this.alpha?1:0)|(this.bump?2:0);
+    const bytes=this.frameBytes();
     this.device.queue.writeBuffer(this.uniform,0,bytes);const encoder=this.device.createCommandEncoder();
     if(!this.paused){const compute=encoder.beginComputePass();compute.setPipeline(this.compute);compute.setBindGroup(0,this.computeGroup);compute.setBindGroup(1,this.textureGroup!);compute.dispatchWorkgroups(Math.ceil(this.width/8),Math.ceil(this.height/8));compute.end();this.sample++;if(this.maxSpp>0 && this.sample>=this.maxSpp)this.paused=true;this.stats(this.sample);}
     const render=encoder.beginRenderPass({colorAttachments:[{view:this.context.getCurrentTexture().createView(),loadOp:'clear',storeOp:'store',clearValue:{r:0,g:0,b:0,a:1}}]});render.setPipeline(this.present);render.setBindGroup(0,this.presentGroup!);render.draw(3);render.end();this.device.queue.submit([encoder.finish()]);
@@ -162,5 +185,5 @@ export class Renderer {
     if(!this.metadata?.renderable)return;for(let row=0;row<3;row++)this.camera[row*4+3]+=this.camera[row*4]*dx+this.camera[row*4+1]*dy+this.camera[row*4+2]*dz;this.reset();
   }
   disposeScene(){this.serial++;for(const b of this.owned)b.destroy();for(const t of this.imageTextures)t.destroy();this.imageTextures=[];this.textureGroup=undefined;this.owned=[];this.metadata=undefined;this.computeGroup=undefined;this.presentGroup=undefined;this.sceneGPU=[];this.sceneBytes=[];this.reset();}
-  destroy(){cancelAnimationFrame(this.raf);this.disposeScene();this.white?.destroy();this.uniform?.destroy();this.device?.destroy();}
+  destroy(){cancelAnimationFrame(this.raf);this.disposeScene();this.captureBuffer?.destroy();this.white?.destroy();this.uniform?.destroy();this.device?.destroy();}
 }

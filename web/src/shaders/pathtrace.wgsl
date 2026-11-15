@@ -15,6 +15,11 @@ struct Hit { t:f32, uv:vec2f, prim:u32, inst:u32, valid:u32, failed:u32 }
 @group(0) @binding(4) var<storage,read> records:array<u32>;
 @group(0) @binding(5) var<storage,read_write> accumulation:array<vec4f>;
 @group(0) @binding(6) var<storage,read_write> diagnostics:array<atomic<u32>>;
+@group(0) @binding(7) var<storage,read_write> capture:array<vec4f>;
+var<private> capturing:bool=false;
+var<private> captured:u32=0u;
+var<private> slot:u32=0u;
+fn observe(offset:u32,value:vec4f){if(capturing && captured<=64u){capture[slot+offset]=value;}}
 const PI:f32=3.141592653589793;
 const NONE:u32=0xffffffffu;
 fn random(state:ptr<function,u32>)->f32 {
@@ -96,17 +101,43 @@ fn light_pdf(origin:vec3f,p:vec3f,i:u32,primitive:u32)->f32 {
   return dot(delta,delta)/max(1e-20,cosine*area(i,primitives[primitive])*f32(records[7]+records[11]));
 }
 fn tent(state:ptr<function,u32>,radius:f32)->f32 {let u=random(state);if(u<.5){return radius*(sqrt(2*u)-1);}return radius*(1-sqrt(2-2*u));}
-@compute @workgroup_size(8,8)
-fn main(@builtin(global_invocation_id) id:vec3u) {
-  if(id.x>=frame.size.x || id.y>=frame.size.y){return;}let index=id.y*frame.size.x+id.x;
+fn camera_sample(id:vec3u)->vec3f {
   var state=((id.x*1973u+id.y*9277u+(frame.size.z+1u)*26699u)^(bitcast<u32>(frame.sampling.z)*2246822519u))|1u;
   var jitter=vec2f((2*random(&state)-1)*frame.params.w,(2*random(&state)-1)*frame.sampling.x);
   if(frame.params.z>0){jitter=vec2f(tent(&state,frame.params.w),tent(&state,frame.sampling.x));}
   let aspect=f32(frame.size.x)/f32(frame.size.y);let sx=(2*(f32(id.x)+.5+jitter.x)/f32(frame.size.x)-1)*frame.params.x*max(aspect,1.);
   let sy=(1-2*(f32(id.y)+.5+jitter.y)/f32(frame.size.y))*frame.params.x*max(1/aspect,1.);
   let local=vec4f(sx,sy,1,0);let d=normalize(vec3f(dot(frame.camera[0],local),dot(frame.camera[1],local),dot(frame.camera[2],local)));
-  let o=vec3f(frame.camera[0].w,frame.camera[1].w,frame.camera[2].w);let color=trace(Ray(o,d),&state);
+  let o=vec3f(frame.camera[0].w,frame.camera[1].w,frame.camera[2].w);return trace(Ray(o,d),&state);
+}
+fn camera_ray(id:vec3u)->Ray {
+  let aspect=f32(frame.size.x)/f32(frame.size.y);
+  let local=vec4f((2*(f32(id.x)+.5)/f32(frame.size.x)-1)*frame.params.x*max(aspect,1.),(1-2*(f32(id.y)+.5)/f32(frame.size.y))*frame.params.x*max(1/aspect,1.),1,0);
+  return Ray(vec3f(frame.camera[0].w,frame.camera[1].w,frame.camera[2].w),normalize(vec3f(dot(frame.camera[0],local),dot(frame.camera[1],local),dot(frame.camera[2],local))));
+}
+fn primary_aov(id:vec3u)->vec3f {
+  let ray=camera_ray(id);let hit=intersect(ray,1e30);if(hit.valid==0u){return vec3f(0);}
+  let view=frame.features.y;
+  if(view==1u){return surface_material(hit,0).color;}
+  if(view==2u){return .5+.5*geometric(hit.inst,primitives[hit.prim]);}
+  if(view==3u){return .5+.5*surface_frame(hit,ray,0)[2];}
+  if(view==4u){return vec3f(hit.t/(1+hit.t));}
+  if(view==5u){let uv=surface_uv(hit).uv;return vec3f(fract(uv),0);}
+  let key=select(hit.inst,info(hit.inst).y,view==7u)+1u;
+  return vec3f(f32((key*73u)%251u),f32((key*151u)%251u),f32((key*199u)%251u))/250.;
+}
+@compute @workgroup_size(8,8)
+fn main(@builtin(global_invocation_id) id:vec3u) {
+  if(id.x>=frame.size.x || id.y>=frame.size.y){return;}let index=id.y*frame.size.x+id.x;
+  var color=vec3f(0);if(frame.features.y==0u){color=camera_sample(id);}else{color=primary_aov(id);}
   if(frame.size.z==0u){accumulation[index]=vec4f(color,1);}else{accumulation[index]+=vec4f(color,1);}
+}
+// Replay shares camera_sample and trace, with the exact original RNG seed/order.
+@compute @workgroup_size(1)
+fn capture_path() {
+  capturing=true;captured=0u;
+  let color=camera_sample(vec3u(frame.features.z,frame.features.w,0));
+  capture[0]=vec4f(color,f32(captured));
 }
 // Query mode reuses an isolated accumulation buffer as input/output, not image history.
 @compute @workgroup_size(64)

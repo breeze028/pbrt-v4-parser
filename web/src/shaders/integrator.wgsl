@@ -25,6 +25,13 @@ fn visibility(initial:Ray,distance:f32,width:f32,state:ptr<function,u32>)->vec3f
     let origin=offset(p,g,ray.d);remaining-=hit.t+max(0.,dot(origin-p,ray.d));if(remaining<=1e-5){return weight;}ray=Ray(origin,ray.d);
   }atomicAdd(&diagnostics[3],1u);return vec3f(0);
 }
+// Teaching strategies: defaults (0 bits) retain the original MIS estimator.
+fn use_nee()->bool{return (frame.features.x&4u)==0u;}
+fn use_mis()->bool{return (frame.features.x&8u)==0u;}
+fn hit_weight(pdf:f32,light:f32,delta:bool)->f32 {
+  if(delta || !use_nee()){return 1.;}
+  if(!use_mis()){return 0.;}return power(pdf,light);
+}
 fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
   var ray=initial;var radiance=vec3f(0);var throughput=vec3f(1);var previous=ray.o;var previous_pdf=0.;var previous_delta=true;
   var depth=0u;var transmission_steps=0u;var alpha_steps=0u;var eta_scale=1.;var cone_width=0.;
@@ -32,10 +39,10 @@ fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
   let light_count=records[7]+records[11];let environment=floats(records[10]).xyz;
   for(var event=0u;event<frame.size.w+160u;event++){
     if(event==frame.size.w+159u){atomicAdd(&diagnostics[3],1u);break;}
-    if(depth>=frame.size.w){break;}
+    if(depth>=frame.size.w && (frame.features.x&16u)==0u){break;}
     let hit=intersect(ray,1e30);if(hit.failed!=0u){break;}
     if(hit.valid==0u){
-      var weight=1.;if(!previous_delta && records[11]>0u){weight=power(previous_pdf,1/(4*PI*f32(light_count)));}
+      var weight=1.;if(!previous_delta && records[11]>0u){weight=hit_weight(previous_pdf,1/(4*PI*f32(light_count)),previous_delta);}
       radiance+=clamp_sample(throughput*environment*weight,depth);break;
     }
     cone_width+=hit.t*cone_spread;let p=ray.o+ray.d*hit.t;let primitive=primitives[hit.prim];let ids=info(hit.inst);let g=geometric(hit.inst,primitive);
@@ -43,15 +50,25 @@ fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
     if(random(state)>=surface_alpha(hit,footprint)){
       alpha_steps++;if(alpha_steps>=128u){atomicAdd(&diagnostics[3],1u);break;}ray=Ray(offset(p,g,ray.d),ray.d);continue;
     }alpha_steps=0u;
+    if(capturing && captured>=64u){capturing=false;}
+    if(capturing && captured<64u){
+      slot=1u+captured*12u;captured++;
+      observe(0u,vec4f(p,f32(ids.y)));observe(1u,vec4f(g,0));
+      observe(2u,vec4f(shading(hit,ray),f32(depth)));observe(3u,vec4f(-ray.d,hit.t));
+      observe(4u,vec4f(throughput,previous_pdf));observe(9u,vec4f(radiance,1));
+      observe(11u,vec4f(surface_uv(hit).uv,f32(hit.inst),0));
+    }
     let emission=floats(ibase(hit.inst)+32u);
     if(any(emission.xyz>vec3f(0))){
-      if(emission.w>0 || dot(g,-ray.d)>0){var weight=1.;if(!previous_delta){weight=power(previous_pdf,light_pdf(previous,p,hit.inst,hit.prim));}radiance+=clamp_sample(throughput*emission.xyz*weight,depth);}break;
+      if(emission.w>0 || dot(g,-ray.d)>0){var weight=1.;if(!previous_delta){weight=hit_weight(previous_pdf,light_pdf(previous,p,hit.inst,hit.prim),previous_delta);}radiance+=clamp_sample(throughput*emission.xyz*weight,depth);}break;
     }
+    // Teaching maxDepth counts scattering vertices, including terminal emission.
+    if(depth>=frame.size.w){break;}
     if(ids.y>=records[3]){atomicAdd(&diagnostics[1],1u);break;}
     let m=surface_material(hit,footprint);if(m.kind>3u){atomicAdd(&diagnostics[1],1u);break;}
     let basis=surface_frame(hit,ray,footprint);let inverse_basis=transpose(basis);let wo=inverse_basis*(-ray.d);
     let eta=select(1/m.eta.x,m.eta.x,dot(g,-ray.d)>0);
-    if(light_count>0u && !(is_specular(m) && (m.kind==2u || m.kind==3u))){
+    if(use_nee() && light_count>0u && !(is_specular(m) && (m.kind==2u || m.kind==3u))){
       let chosen=min(u32(random(state)*f32(light_count)),light_count-1u);
       var direction=vec3f(0);var le=environment;var pdf=1/(4*PI*f32(light_count));var distance=1e30;
       if(chosen<records[7]){
@@ -63,15 +80,26 @@ fn trace(initial:Ray,state:ptr<function,u32>)->vec3f {
       }else{
         let z=1-2*random(state);let phi=2*PI*random(state);let r=sqrt(max(0.,1-z*z));direction=vec3f(r*cos(phi),z,r*sin(phi));
       }
+      observe(7u,vec4f(direction,pdf));observe(10u,vec4f(p+direction*min(distance,1e4),0));
       let wi=inverse_basis*direction;let value=bsdf_eval(m,wo,wi,eta);
       if(any(value>vec3f(0)) && any(le>vec3f(0))){
         let origin=offset(p,g,direction);let limit=distance-max(2e-5,distance*1e-5);
         let visible=visibility(Ray(origin,direction),limit,cone_width,state);let bsdf_density=bsdf_pdf(m,wo,wi,eta);
-        radiance+=clamp_sample(throughput*value*le*visible*(abs(wi.z)*power(pdf,bsdf_density)/max(pdf,1e-30)),depth);
+        // snippet:nee:start
+        let mis = select(1., power(pdf, bsdf_density), use_mis());
+        let direct = clamp_sample(
+          throughput * value * le * visible * (abs(wi.z) * mis / max(pdf, 1e-30)), depth);
+        radiance += direct;
+        observe(8u, vec4f(direct, mis));
+        observe(10u, vec4f(p + direction * min(distance, 1e4),
+          select(0., 1., any(visible > vec3f(0)))));
+        // snippet:nee:end
+
       }
     }
-    if(depth>=3u){let survive=clamp(max(throughput.x,max(throughput.y,throughput.z))*eta_scale,.05,.95);if(random(state)>survive){break;}throughput/=survive;}
+    if(depth>=3u){let survive=clamp(max(throughput.x,max(throughput.y,throughput.z))*eta_scale,.05,.95);observe(9u,vec4f(radiance,survive));if(random(state)>survive){observe(11u,vec4f(surface_uv(hit).uv,f32(hit.inst),1));break;}throughput/=survive;}
     let sample=bsdf_sample(m,wo,eta,vec3f(random(state),random(state),random(state)));
+    observe(5u,vec4f(basis*sample.wi,sample.pdf));observe(6u,vec4f(bsdf_eval(m,wo,sample.wi,eta),f32(sample.delta)));
     if(sample.pdf<=0 || !any(sample.weight>vec3f(0))){break;}
     if(any(sample.weight!=sample.weight) || any(abs(sample.weight)>vec3f(1e30))){atomicAdd(&diagnostics[2],1u);break;}
     let direction=normalize(basis*sample.wi);let crosses=dot(direction,g)*dot(-ray.d,g)<0;
