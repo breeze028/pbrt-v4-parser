@@ -1,0 +1,25 @@
+/* Optional starting tokens. Map to the host design system; no global resets. */
+.renderer-ui {
+  --rui-bg: #121414;
+  --rui-panel: #181b1a;
+  --rui-raised: #222624;
+  --rui-border: #303532;
+  --rui-border-soft: #282d2a;
+  --rui-text: #dce0de;
+  --rui-muted: #919c95;
+  --rui-accent: #b2c5a8;
+  --rui-selected: #2c372e;
+  --rui-error: #d69583;
+  --rui-pending: #c5b58d;
+  --rui-font: Inter, Geist, "Segoe UI", Arial, sans-serif;
+  --rui-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --rui-space-1: 4px;
+  --rui-space-2: 8px;
+  --rui-space-3: 12px;
+  --rui-space-4: 16px;
+  --rui-space-6: 24px;
+  --rui-space-8: 32px;
+  --rui-radius-control: 5px;
+  --rui-radius-panel: 8px;
+  --rui-radius-floating: 10px;
+}
