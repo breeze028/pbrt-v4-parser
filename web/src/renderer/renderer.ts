@@ -7,7 +7,13 @@ import type { Metadata } from '../model';
 import type { probes } from './probe';
 import { checkBsdf } from './bsdf-check';
 import { checkTextures } from './texture-check';
+import { debugScene, type DebugScene } from './debug-scene';
 export class Renderer {
+  private debugGeometry?: DebugScene;
+  getDebugScene() {
+    if (!this.metadata?.renderable) throw Error('Load a renderable scene first.');
+    return this.debugGeometry ??= debugScene(this.sceneBytes);
+  }
   device!:GPUDevice;context!:GPUCanvasContext;compute!:GPUComputePipeline;present!:GPURenderPipeline;
   uniform!:GPUBuffer;accumulation!:GPUBuffer;diagnostics!:GPUBuffer;computeGroup?:GPUBindGroup;presentGroup?:GPUBindGroup;
   owned:GPUBuffer[]=[];metadata?:Metadata;camera:number[]=[];sample=0;width=384;height=384;previewSize=384;exposure=1;paused=false;failed=false;clamp=true;lod0=false;alpha=true;bump=true;maxSpp=0;seed=1;depth=8;
@@ -48,6 +54,7 @@ export class Renderer {
     const b=this.device.createBuffer({label,size:Math.max(16,data.byteLength),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});if(data.byteLength)this.device.queue.writeBuffer(b,0,data);this.owned.push(b);return b;
   }
   async load(metadata:Metadata,buffers:ArrayBuffer[]){
+    this.debugGeometry=undefined;
     this.serial++;this.disposeScene();this.metadata=metadata;this.camera=[...metadata.camera.transform];this.depth=metadata.maxDepth;this.failed=false;
     if(metadata.layoutVersion!==2)throw Error('GPU layout version mismatch');
     if(!metadata.renderable){this.status('Scene parsed, but some required rendering features are unsupported.',true);return;}
@@ -144,7 +151,7 @@ export class Renderer {
       const group=this.device.createBindGroup({layout:this.compute.getBindGroupLayout(0),entries:[uniform,this.sceneGPU[2],this.sceneGPU[0],this.sceneGPU[1],this.sceneGPU[3],this.accumulation,diagnostic,output].map((buffer,binding)=>({binding,resource:{buffer}}))});
       const encoder=this.device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(this.capturePipeline);pass.setBindGroup(0,group);pass.setBindGroup(1,this.textureGroup!);pass.dispatchWorkgroups(1);pass.end();encoder.copyBufferToBuffer(output,0,readback,0,12304);this.device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);
       if(serial!==this.serial)throw Error('Scene changed during capture');
-      const data=new Float32Array(readback.getMappedRange()).slice();return {pixel:[x,y],sample,radiance:Array.from(data.slice(0,3)),vertices:Array.from({length:Math.min(64,data[3])},(_,i)=>Array.from(data.slice(4+i*48,4+(i+1)*48))),camera:[...this.camera],truncated:data[3]>=64};
+      const data=new Float32Array(readback.getMappedRange()).slice();return {pixel:[x,y],sample,fov:this.metadata!.fov,radiance:Array.from(data.slice(0,3)),vertices:Array.from({length:Math.min(64,data[3])},(_,i)=>Array.from(data.slice(4+i*48,4+(i+1)*48))),camera:[...this.camera],truncated:data[3]>=64};
     }finally{uniform.destroy();output.destroy();readback.destroy();diagnostic.destroy();}
   }
   private frame(){
@@ -184,6 +191,6 @@ export class Renderer {
   move(dx:number,dy:number,dz:number){
     if(!this.metadata?.renderable)return;for(let row=0;row<3;row++)this.camera[row*4+3]+=this.camera[row*4]*dx+this.camera[row*4+1]*dy+this.camera[row*4+2]*dz;this.reset();
   }
-  disposeScene(){this.serial++;for(const b of this.owned)b.destroy();for(const t of this.imageTextures)t.destroy();this.imageTextures=[];this.textureGroup=undefined;this.owned=[];this.metadata=undefined;this.computeGroup=undefined;this.presentGroup=undefined;this.sceneGPU=[];this.sceneBytes=[];this.reset();}
+  disposeScene(){this.debugGeometry=undefined;this.serial++;for(const b of this.owned)b.destroy();for(const t of this.imageTextures)t.destroy();this.imageTextures=[];this.textureGroup=undefined;this.owned=[];this.metadata=undefined;this.computeGroup=undefined;this.presentGroup=undefined;this.sceneGPU=[];this.sceneBytes=[];this.reset();}
   destroy(){cancelAnimationFrame(this.raf);this.disposeScene();this.captureBuffer?.destroy();this.white?.destroy();this.uniform?.destroy();this.device?.destroy();}
 }
